@@ -1,0 +1,101 @@
+{
+  "theme": "Dark",
+  "archetype": "7 (Electric & Neon) - The 'HoodStories' Tactical Mod",
+  "mood": "Immersive, gritty but highly polished, authoritative, cyber-tactical. Think high-end esports meets GTA V Los Santos at night.",
+  "colors": {
+    "background_base": "#050505",
+    "background_surface": "#0F0F13",
+    "background_card": "#141418",
+    "primary_accent": "#00E5FF",
+    "secondary_accent": "#2563EB",
+    "text_primary": "#FAFAFA",
+    "text_secondary": "#A1A1AA",
+    "border_subtle": "rgba(255, 255, 255, 0.08)",
+    "status": {
+      "nowe": "#00E5FF",
+      "zaakceptowane": "#10B981",
+      "odrzucone": "#EF4444"
+    }
+  },
+  "typography": {
+    "font_headings": "Unbounded, sans-serif",
+    "font_body": "Outfit, sans-serif",
+    "font_mono": "JetBrains Mono, monospace",
+    "hierarchy": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl font-black tracking-tighter uppercase",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl font-bold tracking-tight uppercase",
+      "h3": "text-xl sm:text-2xl font-semibold tracking-tight",
+      "body": "text-base font-normal leading-relaxed text-zinc-400",
+      "labels": "text-xs font-mono tracking-[0.2em] uppercase text-zinc-500"
+    }
+  },
+  "layout_and_spacing": {
+    "general": "Generous Spacing Philosophy. Use p-8 or p-12 for breathing room inside main containers.",
+    "grid_system": "Bento Grid Protocol: MODE A ('TETRIS') for the landing page hero and features. MODE B ('CONTROL ROOM') for the 'My Applications' dashboard.",
+    "borders_and_radii": "Use rounded-xl or rounded-2xl. Sharp but approachable. NEVER use huge border-radii on everything, maintain a structural feel.",
+    "surface_styles": "Use the 'Tracing Beam' concept for active/highlighted recruitments. Use 'Retro-Futurism' (deep black, subtle cyan border glow) for standard cards."
+  },
+  "components": {
+    "cards": {
+      "style": "Flat background (#141418), 1px subtle border (border-white/10). On hover, subtle lift (-translate-y-1) and a cyan glow drop-shadow (hover:shadow-[0_0_15px_rgba(0,229,255,0.15)]).",
+      "usage": "Recruitment Cards List"
+    },
+    "buttons": {
+      "primary": "Solid #00E5FF background with black text. Font-bold, tracking-wide. Subtle outer glow. hover:bg-[#00E5FF]/90.",
+      "secondary": "Transparent background, 1px border-white/20, text-white. Hover: border-[#00E5FF] and text-[#00E5FF]."
+    },
+    "forms": {
+      "inputs": "Shadcn components heavily customized. bg-black/40, border-white/10, focus:border-[#00E5FF] focus:ring-1 focus:ring-[#00E5FF]. Text is #FAFAFA.",
+      "labels": "Outfit text-sm text-zinc-300 font-medium. Error states in #EF4444.",
+      "fields": "Support short text (Input), long text (Textarea), single choice (RadioGroup/Select), multi choice (Checkbox)."
+    },
+    "badges": {
+      "style": "Small padding (px-2.5 py-0.5), font-mono text-xs uppercase. Background is 15% opacity of the text color.",
+      "nowe": "bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30",
+      "zaakceptowane": "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30",
+      "odrzucone": "bg-red-500/15 text-red-400 border border-red-500/30"
+    },
+    "navigation": {
+      "style": "Glassmorphism: bg-[#050505]/80 backdrop-blur-xl border-b border-white/10. Sticky top-0 z-50. Navigation must be visible on desktop."
+    }
+  },
+  "motion_and_interactions": {
+    "hover": "All interactive elements must have hover states. Use transition-all duration-300 ease-out.",
+    "lists": "Staggered entrance animations for recruitment cards and application history using framer-motion.",
+    "accessibility": "Respect prefers-reduced-motion."
+  },
+  "icons_and_assets": {
+    "icon_library": "@phosphor-icons/react",
+    "installation": "yarn add @phosphor-icons/react",
+    "images": {
+      "hero_background": {
+        "url": "https://images.pexels.com/photos/28122495/pexels-photo-28122495.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+        "category": "Hero Background",
+        "description": "Cyberpunk alleyway with neon lights. MUST be overlaid with bg-black/80 to ensure text readability."
+      },
+      "form_sidebar_background": {
+        "url": "https://images.unsplash.com/photo-1758404196311-70c62a445e9c?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjY2NzZ8MHwxfHNlYXJjaHwzfHxjeWJlcnB1bmslMjBjaXR5JTIwYmx1ZSUyMG5lb258ZW58MHx8fHwxNzc2NzA0OTE4fDA&ixlib=rb-4.1.0&q=85",
+        "category": "Split-screen Background",
+        "description": "Modern cityscape. Use on the side of the application form layout with a heavy bg-[#050505]/90 overlay."
+      },
+      "decorative_element": {
+        "url": "https://images.unsplash.com/photo-1770177267441-1d8dadda4feb?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjA2MjJ8MHwxfHNlYXJjaHwxfHxnYW1pbmclMjBuZW9uJTIwY29udHJvbGxlciUyMGRhcmt8ZW58MHx8fHwxNzc2NzA0OTE1fDA&ixlib=rb-4.1.0&q=85",
+        "category": "Card Accent Image",
+        "description": "Glowing video game controller. Can be used as a subtle banner inside the 'My Applications' header."
+      }
+    }
+  },
+  "accessibility": {
+    "contrast": "Ensure all text against the dark backgrounds meets at least 4.5:1 ratio. The primary accent (#00E5FF) against black is highly legible.",
+    "testing": "All interactive elements MUST include data-testid attributes (e.g., data-testid='recruitment-card-apply-button')."
+  },
+  "instructions_to_main_agent": [
+    "Use Tailwind CSS strictly for all layout and styling. Do not write custom CSS unless absolutely necessary.",
+    "Install and use @phosphor-icons/react for icons.",
+    "Install framer-motion for entrance animations on the recruitment lists.",
+    "When building the layout, use pure HTML/Tailwind for the marketing/landing page structure, but heavily customized Shadcn components for the Application Forms (Input, Textarea, RadioGroup, Checkbox, Select).",
+    "CRITICAL: The hero image MUST have an overlay of at least bg-black/80. If you use it without overlay, it will ruin the contrast.",
+    "CRITICAL: Ensure that the fonts are imported via Google Fonts in index.html or global css: @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;400;500;600&family=Unbounded:wght@300;400;700;900&display=swap');",
+    "Use Polish language throughout the UI exactly as requested: 'nowe', 'zaakceptowane', 'odrzucone', 'Aplikuj', 'Moje Aplikacje', etc."
+  ]
+}

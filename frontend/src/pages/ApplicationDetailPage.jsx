@@ -1,0 +1,141 @@
+import { useState, useEffect } from "react";
+import { useParams, Link } from "react-router-dom";
+import { useAuth } from "../hooks/useAuth";
+import { Badge } from "../components/ui/badge";
+import { Separator } from "../components/ui/separator";
+import { Loader2, ArrowLeft, Clock, FileText } from "lucide-react";
+import axios from "axios";
+
+const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
+
+const STATUS_CONFIG = {
+  nowe: { label: "Nowe", classes: "bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30" },
+  zaakceptowane: { label: "Zaakceptowane", classes: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" },
+  odrzucone: { label: "Odrzucone", classes: "bg-red-500/15 text-red-400 border border-red-500/30" },
+};
+
+export default function ApplicationDetailPage() {
+  const { id } = useParams();
+  const { user, loading: authLoading } = useAuth();
+  const [application, setApplication] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+
+  useEffect(() => {
+    if (!user) {
+      setLoading(false);
+      return;
+    }
+    axios
+      .get(`${API}/my-applications/${id}`, { withCredentials: true })
+      .then((res) => setApplication(res.data))
+      .catch((err) => setError(err.response?.data?.detail || "Nie udało się załadować aplikacji"))
+      .finally(() => setLoading(false));
+  }, [id, user]);
+
+  if (authLoading || loading) {
+    return (
+      <div className="flex justify-center py-32" data-testid="application-detail-loading">
+        <Loader2 className="w-8 h-8 animate-spin text-[#00E5FF]" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center">
+        <p className="text-zinc-400">Zaloguj się, aby zobaczyć aplikację.</p>
+      </div>
+    );
+  }
+
+  if (error || !application) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-16 text-center">
+        <p className="text-zinc-400 mb-4">{error || "Aplikacja nie znaleziona"}</p>
+        <Link to="/my-applications" className="text-[#00E5FF] text-sm hover:underline">Powrót</Link>
+      </div>
+    );
+  }
+
+  const status = STATUS_CONFIG[application.status] || STATUS_CONFIG.nowe;
+
+  const answerMap = {};
+  for (const ans of application.answers) {
+    answerMap[ans.question_id] = ans;
+  }
+
+  return (
+    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8" data-testid="application-detail">
+      {/* Back link */}
+      <Link
+        to="/my-applications"
+        className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6"
+        data-testid="back-to-applications"
+      >
+        <ArrowLeft className="w-3.5 h-3.5" />
+        Moje Aplikacje
+      </Link>
+
+      {/* Header */}
+      <div className="hs-animate-fade-up mb-8">
+        <div className="flex items-center gap-3 mb-3">
+          <FileText className="w-5 h-5 text-[#00E5FF]" />
+          <h1
+            className="text-xl sm:text-2xl font-bold tracking-tight"
+            style={{ fontFamily: "'Unbounded', sans-serif", color: "#FAFAFA" }}
+            data-testid="application-recruitment-name"
+          >
+            {application.recruitment_name}
+          </h1>
+        </div>
+        <div className="flex items-center gap-4 ml-8">
+          <Badge className={`${status.classes} text-xs font-mono uppercase px-2.5 py-0.5`} data-testid="application-status-badge">
+            {status.label}
+          </Badge>
+          <span className="text-xs text-zinc-500 flex items-center gap-1" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+            <Clock className="w-3 h-3" />
+            {new Date(application.created_at).toLocaleDateString("pl-PL", { day: "numeric", month: "long", year: "numeric" })}
+          </span>
+        </div>
+      </div>
+
+      <Separator className="mb-8 border-white/5" />
+
+      {/* Answers (read-only) */}
+      <div className="space-y-4" data-testid="application-answers">
+        {(application.questions_snapshot || []).map((q) => {
+          const ans = answerMap[q.id];
+          let displayValue = ans?.answer_value || "";
+          if (q.field_type === "multi_choice" && displayValue) {
+            try {
+              const parsed = JSON.parse(displayValue);
+              if (Array.isArray(parsed)) displayValue = parsed.join(", ");
+            } catch {
+              // keep as-is
+            }
+          }
+
+          return (
+            <div key={q.id} className="rounded-xl bg-[#0F0F13] border border-white/5 p-5" data-testid={`answer-${q.id}`}>
+              <p className="text-sm font-medium text-zinc-400 mb-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                {q.label}
+                {q.required && <span className="text-red-400/50 ml-1">*</span>}
+              </p>
+              <p className="text-sm text-zinc-200 whitespace-pre-wrap" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                {displayValue || <span className="text-zinc-600 italic">Brak odpowiedzi</span>}
+              </p>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Footer note */}
+      <div className="mt-8 text-center">
+        <p className="text-xs text-zinc-600" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+          Aplikacje nie mogą być edytowane po złożeniu.
+        </p>
+      </div>
+    </div>
+  );
+}

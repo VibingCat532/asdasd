@@ -1,0 +1,28 @@
+{
+  "buildCommand": "npm run build",
+  "devCommand": "npm run dev",
+  "installCommand": "npm install && cd backend-node && npm install && cd ../frontend && npm install",
+  "framework": "create-react-app",
+  "root": ".",
+  "functions": {
+    "api/**/*.js": {
+      "runtime": "nodejs18.x"
+    }
+  },
+  "env": [
+    "DATABASE_URL",
+    "DISCORD_CLIENT_ID",
+    "DISCORD_CLIENT_SECRET",
+    "DISCORD_BOT_TOKEN",
+    "DISCORD_REDIRECT_URI",
+    "JWT_SECRET",
+    "FRONTEND_URL",
+    "CORS_ORIGINS"
+  ],
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "http://localhost:3001/api/$1"
+    }
+  ]
+}

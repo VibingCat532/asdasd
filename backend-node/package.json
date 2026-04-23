@@ -19,15 +19,16 @@
   "author": "HoodStories",
   "license": "MIT",
   "dependencies": {
-    "express": "^4.18.2",
-    "pg": "^8.11.3",
-    "dotenv": "^16.3.1",
-    "jsonwebtoken": "^9.1.2",
     "axios": "^1.6.2",
-    "uuid": "^9.0.1",
     "cookie-parser": "^1.4.6",
     "cors": "^2.8.5",
-    "express-async-errors": "^3.1.1"
+    "dotenv": "^16.3.1",
+    "express": "^4.18.2",
+    "express-async-errors": "^3.1.1",
+    "hoodstories-vercel-root": "file:..",
+    "jsonwebtoken": "^9.0.3",
+    "pg": "^8.11.3",
+    "uuid": "^9.0.1"
   },
   "devDependencies": {
     "nodemon": "^3.0.2"

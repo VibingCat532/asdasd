@@ -11,8 +11,8 @@ import {
   TooltipTrigger,
 } from "../components/ui/tooltip";
 import axios from "axios";
+import { API, API_ORIGIN } from "../lib/api";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function LandingPage() {
   const [user, setUser] = useState(null);
@@ -289,7 +289,7 @@ export default function LandingPage() {
             )}
 
             <a
-              href={`${process.env.REACT_APP_BACKEND_URL}/api/docs`}
+              href={`${API_ORIGIN}/api/docs`}
               target="_blank"
               rel="noopener noreferrer"
               className="hs-status-pill hover:border-[var(--hs-accent)]/20 transition-colors"

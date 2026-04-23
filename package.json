@@ -1,0 +1,12 @@
+{
+  "name": "hoodstories-vercel-root",
+  "private": true,
+  "version": "1.0.0",
+  "engines": {
+    "node": "18.x"
+  },
+  "scripts": {
+    "build": "yarn --cwd frontend build",
+    "install:all": "cd backend-node && npm ci && cd .. && yarn install --cwd frontend --ignore-engines"
+  }
+}

@@ -11,8 +11,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import { Loader2, ArrowLeft, Plus, Trash2, GripVertical, Save, Lock, AlertTriangle, UserPlus, X, ChevronUp, ChevronDown } from "lucide-react";
 import axios from "axios";
+import { API } from "../lib/api";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const COLORS = [
   { label: "Cyan", value: "#00E5FF" },

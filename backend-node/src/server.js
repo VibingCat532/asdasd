@@ -18,6 +18,7 @@ const staffRoutes = require('./routes/staff');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
+let initPromise = null;
 
 // ────────── Middleware ──────────
 
@@ -32,6 +33,30 @@ app.use(cors({
   origin: corsOrigins === '*' ? '*' : corsOrigins.split(','),
   credentials: true,
 }));
+
+async function ensureAppReady() {
+  if (!process.env.DATABASE_URL) {
+    return;
+  }
+
+  if (!initPromise) {
+    initPromise = initPool().catch((err) => {
+      initPromise = null;
+      throw err;
+    });
+  }
+
+  await initPromise;
+}
+
+app.use(async (req, res, next) => {
+  try {
+    await ensureAppReady();
+    next();
+  } catch (err) {
+    next(err);
+  }
+});
 
 // ────────── Routes ──────────
 
@@ -76,8 +101,7 @@ app.use((err, req, res, next) => {
 
 async function startServer() {
   try {
-    // Initialize database
-    await initPool();
+    await ensureAppReady();
 
     // Start listening
     app.listen(PORT, () => {
@@ -92,19 +116,20 @@ async function startServer() {
 
 // ────────── Graceful Shutdown ──────────
 
-process.on('SIGINT', async () => {
-  logger.info('SIGINT received, shutting down gracefully...');
-  await closePool();
-  process.exit(0);
-});
+if (require.main === module) {
+  process.on('SIGINT', async () => {
+    logger.info('SIGINT received, shutting down gracefully...');
+    await closePool();
+    process.exit(0);
+  });
 
-process.on('SIGTERM', async () => {
-  logger.info('SIGTERM received, shutting down gracefully...');
-  await closePool();
-  process.exit(0);
-});
+  process.on('SIGTERM', async () => {
+    logger.info('SIGTERM received, shutting down gracefully...');
+    await closePool();
+    process.exit(0);
+  });
 
-// Start the server
-startServer();
+  startServer();
+}
 
 module.exports = app;

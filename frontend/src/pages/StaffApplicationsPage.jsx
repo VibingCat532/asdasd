@@ -6,8 +6,8 @@ import { Separator } from "../components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Loader2, ArrowLeft, Users, FileText, Clock, CheckCircle, XCircle, AlertTriangle } from "lucide-react";
 import axios from "axios";
+import { API } from "../lib/api";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const STATUS_CFG = {
   nowe: { label: "Nowe", cls: "bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30" },

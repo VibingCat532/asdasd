@@ -5,8 +5,8 @@ import { Badge } from "../components/ui/badge";
 import { Separator } from "../components/ui/separator";
 import { Loader2, ArrowLeft, Clock, FileText } from "lucide-react";
 import axios from "axios";
+import { API } from "../lib/api";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const STATUS_CONFIG = {
   nowe: { label: "Nowe", classes: "bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30" },

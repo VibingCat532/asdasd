@@ -10,8 +10,8 @@ import { Separator } from "../components/ui/separator";
 import { ArrowLeft, Loader2, Send, AlertTriangle, CheckCircle, Lock, LogIn } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import axios from "axios";
+import { API } from "../lib/api";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function RecruitmentDetailPage() {
   const { id } = useParams();

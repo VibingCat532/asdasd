@@ -4,8 +4,8 @@ import { useAuth } from "../hooks/useAuth";
 import { Badge } from "../components/ui/badge";
 import { Loader2, Plus, ShieldCheck, Users, FileText, Settings, AlertTriangle, Lock } from "lucide-react";
 import axios from "axios";
+import { API } from "../lib/api";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 const ROLE_LABELS = {
   management: "Management",

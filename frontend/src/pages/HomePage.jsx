@@ -4,8 +4,8 @@ import { useAuth } from "../hooks/useAuth";
 import { Badge } from "../components/ui/badge";
 import { CheckCircle, XCircle, Clock, ArrowRight, Loader2, ShieldCheck } from "lucide-react";
 import axios from "axios";
+import { API } from "../lib/api";
 
-const API = `${process.env.REACT_APP_BACKEND_URL}/api`;
 
 export default function HomePage() {
   const { user } = useAuth();

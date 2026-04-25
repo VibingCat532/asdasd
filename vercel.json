@@ -5,14 +5,15 @@
   "framework": null,
   "outputDirectory": "frontend/build",
   "functions": {
-    "api/[...path].js": {
-      "includeFiles": "backend-node/src/db/schema.sql"
-    },
     "api/index.js": {
       "includeFiles": "backend-node/src/db/schema.sql"
     }
   },
   "rewrites": [
+    {
+      "source": "/api/:path*",
+      "destination": "/api/index?path=:path*"
+    },
     {
       "source": "/((?!api).*)",
       "destination": "/index.html"

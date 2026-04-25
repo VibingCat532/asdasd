@@ -5,7 +5,8 @@ const express = require('express');
 const crypto = require('crypto');
 const { query } = require('../db');
 const { requireAuth, getUserIdFromRequest } = require('../utils/auth');
-const { resolveUserCapabilities, checkRecruitmentAccess } = require('../utils/roles');
+const { resolveUserCapabilities, checkRecruitmentAccess, GUILD_ID } = require('../utils/roles');
+const { addGuildMember, addGuildMemberRole } = require('../utils/discord');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -50,6 +51,112 @@ async function getStaffUser(req) {
   }
 }
 
+async function getRecruitmentPermission(staffUser, recruitmentId) {
+  const capabilities = await resolveUserCapabilities(staffUser.discordId, staffUser.userId);
+
+  if (capabilities.is_management) {
+    return {
+      hasAccess: true,
+      canEditRecruitment: true,
+      canEditQuestions: true,
+      canReviewApplications: true,
+      canManageAccess: true,
+      permissionLevel: 'full',
+      capabilities,
+    };
+  }
+
+  const recResult = await query(
+    'SELECT creator_id, scope FROM recruitments WHERE id = $1',
+    [recruitmentId]
+  );
+
+  if (recResult.rows.length === 0) {
+    return { hasAccess: false, notFound: true, capabilities };
+  }
+
+  const recruitment = recResult.rows[0];
+  if (recruitment.creator_id && recruitment.creator_id === staffUser.userId) {
+    return {
+      hasAccess: true,
+      canEditRecruitment: true,
+      canEditQuestions: true,
+      canReviewApplications: true,
+      canManageAccess: true,
+      permissionLevel: 'full',
+      capabilities,
+    };
+  }
+
+  const accessResult = await query(
+    `SELECT can_edit_questions, can_review_applications
+     FROM recruitment_access
+     WHERE recruitment_id = $1 AND user_id = $2`,
+    [recruitmentId, staffUser.userId]
+  );
+
+  if (accessResult.rows.length > 0) {
+    const access = accessResult.rows[0];
+    return {
+      hasAccess: access.can_edit_questions || access.can_review_applications,
+      canEditRecruitment: false,
+      canEditQuestions: access.can_edit_questions,
+      canReviewApplications: access.can_review_applications,
+      canManageAccess: false,
+      permissionLevel: access.can_edit_questions ? 'editor' : 'reviewer',
+      capabilities,
+    };
+  }
+
+  if (recruitment.scope === 'administracja' && capabilities.is_opiekun_administracji) {
+    return {
+      hasAccess: true,
+      canEditRecruitment: false,
+      canEditQuestions: false,
+      canReviewApplications: true,
+      canManageAccess: false,
+      permissionLevel: 'reviewer',
+      capabilities,
+    };
+  }
+
+  return { hasAccess: false, capabilities };
+}
+
+async function applyAcceptedDiscordRole(recruitmentId, applicationId) {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!botToken) {
+    return { attempted: false, success: false, reason: 'missing_bot_token' };
+  }
+
+  const result = await query(
+    `SELECT r.accepted_discord_role_id, u.discord_id, dot.access_token
+     FROM applications a
+     JOIN recruitments r ON r.id = a.recruitment_id
+     JOIN users u ON u.id = a.user_id
+     LEFT JOIN discord_oauth_tokens dot ON dot.user_id = u.id
+     WHERE a.id = $1 AND a.recruitment_id = $2`,
+    [applicationId, recruitmentId]
+  );
+
+  const row = result.rows[0];
+  if (!row?.accepted_discord_role_id) {
+    return { attempted: false, success: false, reason: 'missing_role_id' };
+  }
+  const joined = row.access_token
+    ? await addGuildMember(GUILD_ID, row.discord_id, row.access_token, botToken)
+    : null;
+  const roleAdded = await addGuildMemberRole(GUILD_ID, row.discord_id, row.accepted_discord_role_id, botToken);
+
+  return {
+    attempted: true,
+    success: roleAdded && (joined !== false),
+    joined,
+    role_added: roleAdded,
+    reason: row.access_token ? null : 'missing_user_oauth_token_role_only',
+  };
+}
+
 // ────────── Public Staff Routes ──────────
 
 /**
@@ -64,6 +171,18 @@ router.get('/me', requireAuth, async (req, res) => {
     }
 
     const capabilities = await resolveUserCapabilities(staffUser.discordId, staffUser.userId);
+    const accessResult = await query(
+      'SELECT COUNT(*) as count FROM recruitment_access WHERE user_id = $1',
+      [staffUser.userId]
+    );
+    const explicitAccessCount = parseInt(accessResult.rows[0]?.count || 0, 10);
+
+    if (explicitAccessCount > 0) {
+      capabilities.is_staff = true;
+      capabilities.has_explicit_recruitment_access = true;
+      capabilities.explicit_recruitment_access_count = explicitAccessCount;
+    }
+
     res.json(capabilities);
   } catch (err) {
     logger.error('Failed to get staff capabilities', err);
@@ -84,7 +203,13 @@ router.get('/recruitments', requireAuth, async (req, res) => {
 
     const capabilities = await resolveUserCapabilities(staffUser.discordId, staffUser.userId);
 
-    if (!capabilities.is_staff) {
+    const explicitAccessResult = await query(
+      'SELECT COUNT(*) as count FROM recruitment_access WHERE user_id = $1',
+      [staffUser.userId]
+    );
+    const explicitAccessCount = parseInt(explicitAccessResult.rows[0]?.count || 0, 10);
+
+    if (!capabilities.is_staff && explicitAccessCount === 0) {
       return res.status(403).json({ error: 'Brak uprawnien do panelu staff' });
     }
 
@@ -102,14 +227,16 @@ router.get('/recruitments', requireAuth, async (req, res) => {
     } else {
       result = await query(
         `SELECT r.id, r.name, r.slug, r.status, r.theme_color, r.scope, r.creator_id, r.created_at,
+                ra.can_edit_questions, ra.can_review_applications,
                 COUNT(DISTINCT a.id) as app_count,
                 COUNT(DISTINCT CASE WHEN a.status = 'nowe' THEN a.id END) as pending_count
          FROM recruitments r
          LEFT JOIN applications a ON a.recruitment_id = r.id
+         LEFT JOIN recruitment_access ra ON ra.recruitment_id = r.id AND ra.user_id = $1
          WHERE r.creator_id = $1
             OR r.id IN (SELECT recruitment_id FROM recruitment_access WHERE user_id = $1)
             OR (r.scope = 'administracja' AND $2)
-         GROUP BY r.id
+         GROUP BY r.id, ra.can_edit_questions, ra.can_review_applications
          ORDER BY r.created_at DESC`,
         [staffUser.userId, capabilities.is_opiekun_administracji]
       );
@@ -121,6 +248,8 @@ router.get('/recruitments', requireAuth, async (req, res) => {
         permissionLevel = 'full';
       } else if (r.creator_id && r.creator_id === staffUser.userId) {
         permissionLevel = 'full';
+      } else if (r.can_edit_questions) {
+        permissionLevel = 'editor';
       } else {
         permissionLevel = 'reviewer';
       }
@@ -133,6 +262,8 @@ router.get('/recruitments', requireAuth, async (req, res) => {
         theme_color: r.theme_color,
         scope: r.scope,
         permission_level: permissionLevel,
+        can_edit_questions: permissionLevel === 'full' || !!r.can_edit_questions,
+        can_review_applications: permissionLevel === 'full' || !!r.can_review_applications || permissionLevel === 'reviewer',
         app_count: parseInt(r.app_count, 10),
         pending_count: parseInt(r.pending_count, 10),
         created_at: r.created_at.toISOString(),
@@ -231,6 +362,216 @@ router.post('/recruitments', requireAuth, async (req, res) => {
   }
 });
 
+router.get('/users', requireAuth, async (req, res) => {
+  try {
+    const staffUser = await getStaffUser(req);
+    if (!staffUser) {
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const capabilities = await resolveUserCapabilities(staffUser.discordId, staffUser.userId);
+    if (!capabilities.is_staff) {
+      return res.status(403).json({ error: 'Brak uprawnien' });
+    }
+
+    const q = String(req.query.q || '').trim();
+    const params = [];
+    let where = '';
+    if (q) {
+      params.push(`%${q}%`);
+      where = `WHERE discord_username ILIKE $1 OR discord_global_name ILIKE $1 OR discord_id ILIKE $1`;
+    }
+
+    const result = await query(
+      `SELECT id, discord_id, discord_username, discord_avatar, discord_global_name
+       FROM users
+       ${where}
+       ORDER BY updated_at DESC
+       LIMIT 25`,
+      params
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    logger.error('Failed to list users', err);
+    res.status(500).json({ error: 'Nie udalo sie pobrac uzytkownikow' });
+  }
+});
+
+router.get('/recruitments/:recruitmentId/access', requireAuth, async (req, res) => {
+  try {
+    const staffUser = await getStaffUser(req);
+    if (!staffUser) {
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const { recruitmentId } = req.params;
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+    if (!permission.canManageAccess) {
+      return res.status(403).json({ error: 'Brak uprawnien do zarzadzania dostepem' });
+    }
+
+    const result = await query(
+      `SELECT u.id, u.discord_id, u.discord_username, u.discord_avatar, u.discord_global_name,
+              ra.can_edit_questions, ra.can_review_applications
+       FROM recruitment_access ra
+       JOIN users u ON u.id = ra.user_id
+       WHERE ra.recruitment_id = $1
+       ORDER BY u.discord_username ASC`,
+      [recruitmentId]
+    );
+
+    res.json(result.rows);
+  } catch (err) {
+    logger.error('Failed to list recruitment access', err);
+    res.status(500).json({ error: 'Nie udalo sie pobrac dostepow' });
+  }
+});
+
+router.post('/recruitments/:recruitmentId/access', requireAuth, async (req, res) => {
+  try {
+    const staffUser = await getStaffUser(req);
+    if (!staffUser) {
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const { recruitmentId } = req.params;
+    const { user_id, can_edit_questions = false, can_review_applications = true } = req.body;
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+    if (!permission.canManageAccess) {
+      return res.status(403).json({ error: 'Brak uprawnien do zarzadzania dostepem' });
+    }
+
+    await query(
+      `INSERT INTO recruitment_access (recruitment_id, user_id, can_edit_questions, can_review_applications)
+       VALUES ($1, $2, $3, $4)
+       ON CONFLICT (recruitment_id, user_id) DO UPDATE SET
+         can_edit_questions = EXCLUDED.can_edit_questions,
+         can_review_applications = EXCLUDED.can_review_applications`,
+      [recruitmentId, user_id, !!can_edit_questions, !!can_review_applications]
+    );
+
+    res.status(201).json({ success: true });
+  } catch (err) {
+    logger.error('Failed to add recruitment access', err);
+    res.status(500).json({ error: 'Nie udalo sie dodac dostepu' });
+  }
+});
+
+router.patch('/recruitments/:recruitmentId/access/:userId', requireAuth, async (req, res) => {
+  try {
+    const staffUser = await getStaffUser(req);
+    if (!staffUser) {
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const { recruitmentId, userId } = req.params;
+    const { can_edit_questions = false, can_review_applications = true } = req.body;
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+    if (!permission.canManageAccess) {
+      return res.status(403).json({ error: 'Brak uprawnien do zarzadzania dostepem' });
+    }
+
+    await query(
+      `UPDATE recruitment_access
+       SET can_edit_questions = $1, can_review_applications = $2
+       WHERE recruitment_id = $3 AND user_id = $4`,
+      [!!can_edit_questions, !!can_review_applications, recruitmentId, userId]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    logger.error('Failed to update recruitment access', err);
+    res.status(500).json({ error: 'Nie udalo sie zaktualizowac dostepu' });
+  }
+});
+
+router.delete('/recruitments/:recruitmentId/access/:userId', requireAuth, async (req, res) => {
+  try {
+    const staffUser = await getStaffUser(req);
+    if (!staffUser) {
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const { recruitmentId, userId } = req.params;
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+    if (!permission.canManageAccess) {
+      return res.status(403).json({ error: 'Brak uprawnien do zarzadzania dostepem' });
+    }
+
+    await query(
+      'DELETE FROM recruitment_access WHERE recruitment_id = $1 AND user_id = $2',
+      [recruitmentId, userId]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    logger.error('Failed to remove recruitment access', err);
+    res.status(500).json({ error: 'Nie udalo sie usunac dostepu' });
+  }
+});
+
+router.get('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
+  try {
+    const staffUser = await getStaffUser(req);
+    if (!staffUser) {
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const { recruitmentId } = req.params;
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+    if (permission.notFound) {
+      return res.status(404).json({ error: 'Rekrutacja nie znaleziona' });
+    }
+    if (!permission.hasAccess) {
+      return res.status(403).json({ error: 'Brak dostepu do tej rekrutacji' });
+    }
+
+    const recResult = await query(
+      `SELECT id, name, slug, description, status, theme_color, scope, accepted_discord_role_id, creator_id, created_at
+       FROM recruitments WHERE id = $1`,
+      [recruitmentId]
+    );
+
+    const recruitment = recResult.rows[0];
+    const questionsResult = await query(
+      `SELECT id, label, field_type, options, required, sort_order
+       FROM recruitment_questions WHERE recruitment_id = $1
+       ORDER BY sort_order ASC`,
+      [recruitmentId]
+    );
+
+    res.json({
+      id: recruitment.id,
+      name: recruitment.name,
+      slug: recruitment.slug,
+      description: recruitment.description,
+      status: recruitment.status,
+      theme_color: recruitment.theme_color,
+      scope: recruitment.scope,
+      accepted_discord_role_id: recruitment.accepted_discord_role_id,
+      creator_id: recruitment.creator_id,
+      permission_level: permission.permissionLevel,
+      can_edit_recruitment: permission.canEditRecruitment,
+      can_edit_questions: permission.canEditQuestions,
+      can_review_applications: permission.canReviewApplications,
+      can_manage_access: permission.canManageAccess,
+      questions: questionsResult.rows.map(q => ({
+        id: q.id,
+        label: q.label,
+        field_type: q.field_type,
+        options: q.options,
+        required: q.required,
+        sort_order: q.sort_order,
+      })),
+      created_at: recruitment.created_at.toISOString(),
+    });
+  } catch (err) {
+    logger.error('Failed to get recruitment details', err);
+    res.status(500).json({ error: 'Nie udalo sie pobrac szczegolow rekrutacji' });
+  }
+});
+
 /**
  * GET /api/staff/recruitments/:recruitmentId
  * Get recruitment details for staff
@@ -304,6 +645,82 @@ router.get('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
  * PATCH /api/staff/recruitments/:recruitmentId
  * Update recruitment
  */
+async function updateRecruitmentSettings(req, res) {
+  try {
+    const staffUser = await getStaffUser(req);
+    if (!staffUser) {
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const { recruitmentId } = req.params;
+    const { name, description, status, theme_color, scope, accepted_discord_role_id } = req.body;
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+    if (!permission.canEditRecruitment) {
+      return res.status(403).json({ error: 'Brak uprawnien do edycji ustawien rekrutacji' });
+    }
+
+    const updates = [];
+    const values = [];
+    let paramCount = 1;
+
+    if (name !== undefined) {
+      updates.push(`name = $${paramCount++}`);
+      values.push(name);
+    }
+    if (description !== undefined) {
+      updates.push(`description = $${paramCount++}`);
+      values.push(description);
+    }
+    if (status !== undefined) {
+      updates.push(`status = $${paramCount++}`);
+      values.push(status);
+    }
+    if (theme_color !== undefined) {
+      updates.push(`theme_color = $${paramCount++}`);
+      values.push(theme_color);
+    }
+    if (scope !== undefined) {
+      updates.push(`scope = $${paramCount++}`);
+      values.push(scope);
+    }
+    if (accepted_discord_role_id !== undefined) {
+      updates.push(`accepted_discord_role_id = $${paramCount++}`);
+      values.push(accepted_discord_role_id);
+    }
+
+    if (updates.length === 0) {
+      return res.status(400).json({ error: 'Brak pol do aktualizacji' });
+    }
+
+    updates.push('updated_at = NOW()');
+    values.push(recruitmentId);
+
+    const sql = `UPDATE recruitments SET ${updates.join(', ')} WHERE id = $${paramCount} RETURNING *`;
+    const result = await query(sql, values);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Rekrutacja nie znaleziona' });
+    }
+
+    const rec = result.rows[0];
+    res.json({
+      id: rec.id,
+      name: rec.name,
+      description: rec.description,
+      status: rec.status,
+      theme_color: rec.theme_color,
+      scope: rec.scope,
+      accepted_discord_role_id: rec.accepted_discord_role_id,
+      updated_at: rec.updated_at.toISOString(),
+    });
+  } catch (err) {
+    logger.error('Failed to update recruitment', err);
+    res.status(500).json({ error: 'Nie udalo sie zaktualizowac rekrutacji' });
+  }
+}
+
+router.patch('/recruitments/:recruitmentId', requireAuth, updateRecruitmentSettings);
+router.put('/recruitments/:recruitmentId', requireAuth, updateRecruitmentSettings);
+
 router.patch('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
   try {
     const staffUser = await getStaffUser(req);
@@ -411,6 +828,48 @@ router.delete('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
  * POST /api/staff/recruitments/:recruitmentId/questions
  * Update recruitment questions
  */
+async function updateRecruitmentQuestions(req, res) {
+  try {
+    const staffUser = await getStaffUser(req);
+    if (!staffUser) {
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const { recruitmentId } = req.params;
+    const { questions } = req.body;
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+    if (!permission.canEditQuestions) {
+      return res.status(403).json({ error: 'Brak uprawnien do edycji pytan' });
+    }
+
+    await query('DELETE FROM recruitment_questions WHERE recruitment_id = $1', [recruitmentId]);
+
+    for (let i = 0; i < questions.length; i++) {
+      const q = questions[i];
+      await query(
+        `INSERT INTO recruitment_questions (recruitment_id, sort_order, label, field_type, options, required)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [
+          recruitmentId,
+          q.sort_order || i,
+          q.label,
+          q.field_type,
+          q.options ? JSON.stringify(q.options) : null,
+          q.required !== false,
+        ]
+      );
+    }
+
+    res.json({ success: true, message: 'Pytania zaktualizowane', count: questions.length });
+  } catch (err) {
+    logger.error('Failed to update questions', err);
+    res.status(500).json({ error: 'Nie udalo sie zaktualizowac pytan' });
+  }
+}
+
+router.post('/recruitments/:recruitmentId/questions', requireAuth, updateRecruitmentQuestions);
+router.put('/recruitments/:recruitmentId/questions', requireAuth, updateRecruitmentQuestions);
+
 router.post('/recruitments/:recruitmentId/questions', requireAuth, async (req, res) => {
   try {
     const staffUser = await getStaffUser(req);
@@ -458,6 +917,158 @@ router.post('/recruitments/:recruitmentId/questions', requireAuth, async (req, r
  * GET /api/staff/recruitments/:recruitmentId/applications
  * List applications for a recruitment
  */
+router.get('/recruitments/:recruitmentId/applications', requireAuth, async (req, res) => {
+  try {
+    const staffUser = await getStaffUser(req);
+    if (!staffUser) {
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const { recruitmentId } = req.params;
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+    if (!permission.canReviewApplications) {
+      return res.status(403).json({ error: 'Brak uprawnien do sprawdzania aplikacji' });
+    }
+
+    const result = await query(
+      `SELECT a.id, a.user_id, a.status, a.created_at,
+              u.discord_id as applicant_discord_id,
+              u.discord_username as applicant_username,
+              u.discord_avatar as applicant_avatar,
+              u.discord_global_name as applicant_global_name
+       FROM applications a
+       JOIN users u ON u.id = a.user_id
+       WHERE a.recruitment_id = $1
+       ORDER BY a.created_at DESC`,
+      [recruitmentId]
+    );
+
+    res.json(result.rows.map(r => ({
+      id: r.id,
+      user_id: r.user_id,
+      applicant_discord_id: r.applicant_discord_id,
+      applicant_username: r.applicant_username,
+      applicant_avatar: r.applicant_avatar,
+      applicant_global_name: r.applicant_global_name,
+      status: r.status,
+      created_at: r.created_at.toISOString(),
+    })));
+  } catch (err) {
+    logger.error('Failed to list applications', err);
+    res.status(500).json({ error: 'Nie udalo sie pobrac aplikacji' });
+  }
+});
+
+router.get('/recruitments/:recruitmentId/applications/:applicationId', requireAuth, async (req, res) => {
+  try {
+    const staffUser = await getStaffUser(req);
+    if (!staffUser) {
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const { recruitmentId, applicationId } = req.params;
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+    if (!permission.canReviewApplications) {
+      return res.status(403).json({ error: 'Brak uprawnien do sprawdzania aplikacji' });
+    }
+
+    const appResult = await query(
+      `SELECT a.id, a.user_id, a.status, a.questions_snapshot, a.created_at,
+              r.name as recruitment_name,
+              u.discord_id as applicant_discord_id,
+              u.discord_username as applicant_username,
+              u.discord_avatar as applicant_avatar,
+              u.discord_global_name as applicant_global_name
+       FROM applications a
+       JOIN recruitments r ON r.id = a.recruitment_id
+       JOIN users u ON u.id = a.user_id
+       WHERE a.id = $1 AND a.recruitment_id = $2`,
+      [applicationId, recruitmentId]
+    );
+
+    if (appResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Aplikacja nie znaleziona' });
+    }
+
+    const application = appResult.rows[0];
+    const answersResult = await query(
+      `SELECT question_id, question_label, question_type, answer_value
+       FROM application_answers WHERE application_id = $1`,
+      [applicationId]
+    );
+
+    res.json({
+      id: application.id,
+      user_id: application.user_id,
+      recruitment_name: application.recruitment_name,
+      applicant_discord_id: application.applicant_discord_id,
+      applicant_username: application.applicant_username,
+      applicant_avatar: application.applicant_avatar,
+      applicant_global_name: application.applicant_global_name,
+      status: application.status,
+      questions_snapshot: application.questions_snapshot,
+      answers: answersResult.rows.map(a => ({
+        question_id: a.question_id,
+        question_label: a.question_label,
+        question_type: a.question_type,
+        answer_value: a.answer_value,
+      })),
+      created_at: application.created_at.toISOString(),
+    });
+  } catch (err) {
+    logger.error('Failed to get application details', err);
+    res.status(500).json({ error: 'Nie udalo sie pobrac szczegolow aplikacji' });
+  }
+});
+
+router.patch('/recruitments/:recruitmentId/applications/:applicationId/status', requireAuth, async (req, res) => {
+  try {
+    const staffUser = await getStaffUser(req);
+    if (!staffUser) {
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const { recruitmentId, applicationId } = req.params;
+    const { status } = req.body;
+    const validStatuses = ['nowe', 'zaakceptowane', 'odrzucone'];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ error: `Status musi byc jednym z: ${validStatuses.join(', ')}` });
+    }
+
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+    if (!permission.canReviewApplications) {
+      return res.status(403).json({ error: 'Brak uprawnien do zmiany statusu aplikacji' });
+    }
+
+    const result = await query(
+      `UPDATE applications SET status = $1, updated_at = NOW()
+       WHERE id = $2 AND recruitment_id = $3
+       RETURNING id, status, updated_at`,
+      [status, applicationId, recruitmentId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Aplikacja nie znaleziona' });
+    }
+
+    let discord_role_result = null;
+    if (status === 'zaakceptowane') {
+      discord_role_result = await applyAcceptedDiscordRole(recruitmentId, applicationId);
+    }
+
+    const app = result.rows[0];
+    res.json({
+      id: app.id,
+      status: app.status,
+      updated_at: app.updated_at.toISOString(),
+      discord_role_result,
+    });
+  } catch (err) {
+    logger.error('Failed to update application status', err);
+    res.status(500).json({ error: 'Nie udalo sie zaktualizowac statusu' });
+  }
+});
+
 router.get('/recruitments/:recruitmentId/applications', requireAuth, async (req, res) => {
   try {
     const staffUser = await getStaffUser(req);

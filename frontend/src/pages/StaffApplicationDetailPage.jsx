@@ -36,9 +36,9 @@ export default function StaffApplicationDetailPage() {
   const changeStatus = async (newStatus) => {
     setChanging(true);
     try {
-      await axios.patch(`${API}/staff/recruitments/${recId}/applications/${appId}/status`,
+      const res = await axios.patch(`${API}/staff/recruitments/${recId}/applications/${appId}/status`,
         { status: newStatus }, { withCredentials: true });
-      setApp(prev => ({ ...prev, status: newStatus }));
+      setApp(prev => ({ ...prev, status: newStatus, discord_role_result: res.data.discord_role_result }));
     } catch (err) {
       setError(err.response?.data?.detail || "Błąd zmiany statusu");
     } finally {
@@ -114,6 +114,11 @@ export default function StaffApplicationDetailPage() {
         )}
 
         {error && <p className="text-sm text-red-400 mt-3">{error}</p>}
+        {app.discord_role_result?.attempted && !app.discord_role_result?.success && (
+          <p className="text-sm text-amber-400 mt-3">
+            Aplikacja zaakceptowana, ale Discord nie potwierdzil nadania roli.
+          </p>
+        )}
       </div>
 
       <Separator className="mb-6 border-white/5" />

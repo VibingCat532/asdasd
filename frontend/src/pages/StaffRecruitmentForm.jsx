@@ -43,6 +43,12 @@ export default function StaffRecruitmentForm() {
   const [allUsers, setAllUsers] = useState([]);
   const [searchQ, setSearchQ] = useState("");
   const [permLevel, setPermLevel] = useState("full");
+  const [permissions, setPermissions] = useState({
+    canEditRecruitment: !isEdit,
+    canEditQuestions: !isEdit,
+    canReviewApplications: !isEdit,
+    canManageAccess: !isEdit,
+  });
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState([]);
@@ -56,6 +62,19 @@ export default function StaffRecruitmentForm() {
       setForm({ name: d.name, description: d.description, status: d.status, theme_color: d.theme_color, scope: d.scope || "", accepted_discord_role_id: d.accepted_discord_role_id || "" });
       setQuestions(d.questions.map(q => ({ ...q, _key: q.id || crypto.randomUUID() })));
       setPermLevel(d.permission_level);
+      setPermissions({
+        canEditRecruitment: !!d.can_edit_recruitment,
+        canEditQuestions: !!d.can_edit_questions,
+        canReviewApplications: !!d.can_review_applications,
+        canManageAccess: !!d.can_manage_access,
+      });
+      if (d.can_edit_recruitment) {
+        setActiveTab("basic");
+      } else if (d.can_edit_questions) {
+        setActiveTab("questions");
+      } else if (d.can_manage_access) {
+        setActiveTab("access");
+      }
     } catch (err) {
       setErrors([err.response?.data?.detail || "Brak dostępu"]);
     } finally {
@@ -79,8 +98,8 @@ export default function StaffRecruitmentForm() {
   }, [searchQ]);
 
   useEffect(() => { fetchRecruitment(); }, [fetchRecruitment]);
-  useEffect(() => { if (isEdit && permLevel === "full") fetchAccess(); }, [isEdit, permLevel, fetchAccess]);
-  useEffect(() => { if (isEdit && permLevel === "full") fetchUsers(); }, [isEdit, permLevel, fetchUsers]);
+  useEffect(() => { if (isEdit && permissions.canManageAccess) fetchAccess(); }, [isEdit, permissions.canManageAccess, fetchAccess]);
+  useEffect(() => { if (isEdit && permissions.canManageAccess) fetchUsers(); }, [isEdit, permissions.canManageAccess, fetchUsers]);
 
   const updateForm = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
 
@@ -122,8 +141,22 @@ export default function StaffRecruitmentForm() {
   // Access
   const addAccess = async (userId) => {
     try {
-      await axios.post(`${API}/staff/recruitments/${id}/access`, { user_id: userId }, { withCredentials: true });
+      await axios.post(`${API}/staff/recruitments/${id}/access`, {
+        user_id: userId,
+        can_edit_questions: false,
+        can_review_applications: true,
+      }, { withCredentials: true });
       fetchAccess();
+    } catch {}
+  };
+  const updateAccess = async (accessUser, patch) => {
+    const next = { ...accessUser, ...patch };
+    try {
+      await axios.patch(`${API}/staff/recruitments/${id}/access/${accessUser.id}`, {
+        can_edit_questions: !!next.can_edit_questions,
+        can_review_applications: !!next.can_review_applications,
+      }, { withCredentials: true });
+      setAccessUsers(prev => prev.map(u => u.id === accessUser.id ? next : u));
     } catch {}
   };
   const removeAccess = async (userId) => {
@@ -145,10 +178,12 @@ export default function StaffRecruitmentForm() {
       }));
 
       if (isEdit) {
-        if (permLevel === "full") {
+        if (permissions.canEditRecruitment) {
           await axios.put(`${API}/staff/recruitments/${id}`, form, { withCredentials: true });
         }
-        await axios.put(`${API}/staff/recruitments/${id}/questions`, { questions: qPayload }, { withCredentials: true });
+        if (permissions.canEditQuestions) {
+          await axios.put(`${API}/staff/recruitments/${id}/questions`, { questions: qPayload }, { withCredentials: true });
+        }
         navigate("/staff");
       } else {
         const res = await axios.post(`${API}/staff/recruitments`, { ...form, questions: qPayload }, { withCredentials: true });
@@ -174,8 +209,9 @@ export default function StaffRecruitmentForm() {
   }
   if (loading) return <div className="flex justify-center py-32"><Loader2 className="w-8 h-8 animate-spin text-[#00E5FF]" /></div>;
 
-  const showBasicTab = !isEdit || permLevel === "full";
-  const showAccessTab = isEdit && permLevel === "full";
+  const showBasicTab = !isEdit || permissions.canEditRecruitment;
+  const showQuestionsTab = !isEdit || permissions.canEditQuestions;
+  const showAccessTab = isEdit && permissions.canManageAccess;
 
   const accessUserIds = new Set(accessUsers.map(u => u.id));
   const availableUsers = allUsers.filter(u => !accessUserIds.has(u.id) && u.id !== user?.id);
@@ -204,7 +240,7 @@ export default function StaffRecruitmentForm() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className="bg-[#0F0F13] border border-white/5">
           {showBasicTab && <TabsTrigger value="basic" className="data-[state=active]:bg-[#00E5FF]/15 data-[state=active]:text-[#00E5FF]" data-testid="tab-basic">Podstawowe</TabsTrigger>}
-          <TabsTrigger value="questions" className="data-[state=active]:bg-[#00E5FF]/15 data-[state=active]:text-[#00E5FF]" data-testid="tab-questions">Pytania ({questions.length})</TabsTrigger>
+          {showQuestionsTab && <TabsTrigger value="questions" className="data-[state=active]:bg-[#00E5FF]/15 data-[state=active]:text-[#00E5FF]" data-testid="tab-questions">Pytania ({questions.length})</TabsTrigger>}
           {showAccessTab && <TabsTrigger value="access" className="data-[state=active]:bg-[#00E5FF]/15 data-[state=active]:text-[#00E5FF]" data-testid="tab-access">Dostęp ({accessUsers.length})</TabsTrigger>}
         </TabsList>
 
@@ -266,7 +302,7 @@ export default function StaffRecruitmentForm() {
         )}
 
         {/* Questions Tab */}
-        <TabsContent value="questions" className="space-y-4">
+        {showQuestionsTab && <TabsContent value="questions" className="space-y-4">
           {questions.map((q, idx) => (
             <div key={q._key || q.id} className="rounded-xl bg-[#0F0F13] border border-white/5 p-4 space-y-3" data-testid={`question-editor-${idx}`}>
               <div className="flex items-start gap-2">
@@ -321,7 +357,7 @@ export default function StaffRecruitmentForm() {
             data-testid="add-question-button">
             <Plus className="w-4 h-4" />Dodaj pytanie
           </button>
-        </TabsContent>
+        </TabsContent>}
 
         {/* Access Tab */}
         {showAccessTab && (
@@ -343,6 +379,24 @@ export default function StaffRecruitmentForm() {
                       <div className="flex-1 min-w-0">
                         <p className="text-sm text-zinc-200 truncate">{u.discord_global_name || u.discord_username}</p>
                         <p className="text-xs text-zinc-500">@{u.discord_username}</p>
+                        <div className="flex flex-wrap gap-4 mt-2">
+                          <label className="flex items-center gap-2 text-xs text-zinc-400">
+                            <Checkbox
+                              checked={!!u.can_edit_questions}
+                              onCheckedChange={v => updateAccess(u, { can_edit_questions: !!v })}
+                              className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
+                            />
+                            Moze edytowac pytania
+                          </label>
+                          <label className="flex items-center gap-2 text-xs text-zinc-400">
+                            <Checkbox
+                              checked={!!u.can_review_applications}
+                              onCheckedChange={v => updateAccess(u, { can_review_applications: !!v })}
+                              className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
+                            />
+                            Moze sprawdzac aplikacje
+                          </label>
+                        </div>
                       </div>
                       <UserPlus className="w-4 h-4 text-zinc-500" />
                     </button>

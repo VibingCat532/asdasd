@@ -83,9 +83,17 @@ CREATE TABLE IF NOT EXISTS recruitment_access (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     recruitment_id UUID NOT NULL REFERENCES recruitments(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    can_edit_questions BOOLEAN NOT NULL DEFAULT false,
+    can_review_applications BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     UNIQUE(recruitment_id, user_id)
 );
+
+ALTER TABLE recruitment_access
+ADD COLUMN IF NOT EXISTS can_edit_questions BOOLEAN NOT NULL DEFAULT false;
+
+ALTER TABLE recruitment_access
+ADD COLUMN IF NOT EXISTS can_review_applications BOOLEAN NOT NULL DEFAULT true;
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_applications_user_recruitment ON applications(user_id, recruitment_id);

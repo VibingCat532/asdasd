@@ -6,7 +6,7 @@ const { URLSearchParams } = require('url');
 const logger = require('./logger');
 
 const DISCORD_API_URL = 'https://discord.com/api/v10';
-const DISCORD_SCOPES = 'identify guilds.members.read';
+const DISCORD_SCOPES = 'identify guilds.members.read guilds.join';
 
 /**
  * Build the Discord OAuth2 authorization URL
@@ -116,10 +116,63 @@ async function getCurrentUserGuildMemberRoles(guildId, accessToken) {
   }
 }
 
+/**
+ * Add a user to the configured guild using their OAuth token.
+ */
+async function addGuildMember(guildId, userId, accessToken, botToken) {
+  try {
+    await axios.put(
+      `${DISCORD_API_URL}/guilds/${guildId}/members/${userId}`,
+      { access_token: accessToken },
+      {
+        headers: {
+          Authorization: `Bot ${botToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000,
+      }
+    );
+
+    return true;
+  } catch (err) {
+    if (err.response?.status === 204 || err.response?.status === 201) {
+      return true;
+    }
+    logger.error('Guild member add failed', err.response?.data || err.message);
+    return false;
+  }
+}
+
+/**
+ * Assign a role to a guild member.
+ */
+async function addGuildMemberRole(guildId, userId, roleId, botToken) {
+  try {
+    await axios.put(
+      `${DISCORD_API_URL}/guilds/${guildId}/members/${userId}/roles/${roleId}`,
+      {},
+      {
+        headers: {
+          Authorization: `Bot ${botToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 15000,
+      }
+    );
+
+    return true;
+  } catch (err) {
+    logger.error('Guild member role add failed', err.response?.data || err.message);
+    return false;
+  }
+}
+
 module.exports = {
   getDiscordOAuthUrl,
   exchangeCodeForTokens,
   getDiscordUser,
   getGuildMemberRoles,
   getCurrentUserGuildMemberRoles,
+  addGuildMember,
+  addGuildMemberRole,
 };

@@ -7,7 +7,7 @@
 - Node.js 18+ 
 - npm or yarn
 - PostgreSQL (or NeonDB)
-- Discord application (for OAuth)
+- Discord application for OAuth
 
 ### Installation
 

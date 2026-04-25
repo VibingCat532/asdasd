@@ -21,6 +21,20 @@ const logger = require('../utils/logger');
 
 const router = express.Router();
 
+function getFrontendUrl(req) {
+  if (process.env.NODE_ENV !== 'production' && process.env.FRONTEND_URL) {
+    return process.env.FRONTEND_URL.replace(/\/$/, '');
+  }
+
+  const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
+  const host = req.headers['x-forwarded-host'] || req.headers.host;
+  if (host) {
+    return `${protocol}://${host}`;
+  }
+
+  return (process.env.FRONTEND_URL || '/').replace(/\/$/, '');
+}
+
 // ────────── Public Endpoints ──────────
 
 /**
@@ -91,7 +105,7 @@ router.get('/discord/start', (req, res) => {
  */
 router.get('/discord/callback', async (req, res) => {
   const { code, state, error, error_description } = req.query;
-  const frontendUrl = process.env.FRONTEND_URL || '/';
+  const frontendUrl = getFrontendUrl(req);
 
   // Handle OAuth errors
   if (error) {

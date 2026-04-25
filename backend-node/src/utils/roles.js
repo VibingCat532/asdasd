@@ -1,7 +1,7 @@
 /**
  * Discord role resolution and RBAC utilities
  */
-const { getGuildMemberRoles } = require('./discord');
+const { getGuildMemberRoles, getCurrentUserGuildMemberRoles } = require('./discord');
 const { query } = require('../db');
 const logger = require('./logger');
 
@@ -20,43 +20,64 @@ const roleCache = new Map();
 /**
  * Fetch and cache guild member roles
  */
-async function getResolvableRoles(discordId) {
+async function getResolvableRoles(discordId, userId) {
   const now = Date.now();
   const cached = roleCache.get(discordId);
 
   if (cached && cached.expiresAt > now) {
-    return cached.roles;
+    return cached;
   }
+
+  let roles = [];
+  let source = 'none';
 
   try {
     const botToken = process.env.DISCORD_BOT_TOKEN;
-    if (!botToken) {
+    if (botToken) {
+      roles = await getGuildMemberRoles(GUILD_ID, discordId, botToken);
+      source = roles.length > 0 ? 'bot' : 'bot_empty';
+    } else {
       logger.warn('DISCORD_BOT_TOKEN not set - role resolution unavailable');
-      return [];
     }
-
-    const roles = await getGuildMemberRoles(GUILD_ID, discordId, botToken);
-    roleCache.set(discordId, {
-      roles,
-      expiresAt: now + CACHE_TTL * 1000,
-    });
-
-    return roles;
   } catch (err) {
-    logger.error('Role resolution failed', err.message);
-    // Return cached data if available, even if expired
-    if (cached) {
-      return cached.roles;
-    }
-    return [];
+    logger.error('Bot role resolution failed', err.message);
   }
+
+  if (roles.length === 0 && userId) {
+    try {
+      const tokenResult = await query(
+        'SELECT access_token FROM discord_oauth_tokens WHERE user_id = $1',
+        [userId]
+      );
+
+      const accessToken = tokenResult.rows[0]?.access_token;
+      if (accessToken) {
+        roles = await getCurrentUserGuildMemberRoles(GUILD_ID, accessToken);
+        source = roles.length > 0 ? 'oauth' : 'oauth_empty';
+      } else if (source === 'none') {
+        source = 'missing_oauth_token';
+      }
+    } catch (err) {
+      logger.error('OAuth role resolution failed', err.message);
+    }
+  }
+
+  const resolved = {
+    roles,
+    source,
+    expiresAt: now + CACHE_TTL * 1000,
+  };
+  roleCache.set(discordId, resolved);
+
+  return resolved;
 }
 
 /**
  * Resolve user capabilities from Discord roles
  */
 async function resolveUserCapabilities(discordId, userId) {
-  const roles = await getResolvableRoles(discordId);
+  const roleResolution = await getResolvableRoles(discordId, userId);
+  const roles = roleResolution.roles || [];
   const resolvedRoles = roles
     .map(roleId => ROLE_MAP[roleId])
     .filter(Boolean);
@@ -91,6 +112,8 @@ async function resolveUserCapabilities(discordId, userId) {
   return {
     discord_id: discordId,
     roles: resolvedRoles,
+    discord_role_count: roles.length,
+    role_resolution_source: roleResolution.source,
     is_management: isManagement,
     is_opiekun: isOpiekun,
     is_opiekun_administracji: isOpiekunAdministracji,

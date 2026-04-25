@@ -6,7 +6,7 @@ const { URLSearchParams } = require('url');
 const logger = require('./logger');
 
 const DISCORD_API_URL = 'https://discord.com/api/v10';
-const DISCORD_SCOPES = 'identify guilds.join';
+const DISCORD_SCOPES = 'identify guilds.members.read';
 
 /**
  * Build the Discord OAuth2 authorization URL
@@ -94,9 +94,32 @@ async function getGuildMemberRoles(guildId, userId, botToken) {
   }
 }
 
+/**
+ * Fetch the authenticated user's guild member roles using their OAuth token.
+ */
+async function getCurrentUserGuildMemberRoles(guildId, accessToken) {
+  try {
+    const response = await axios.get(
+      `${DISCORD_API_URL}/users/@me/guilds/${guildId}/member`,
+      {
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+        },
+        timeout: 10000,
+      }
+    );
+
+    return response.data.roles || [];
+  } catch (err) {
+    logger.error('Current user guild member roles fetch failed', err.message);
+    return [];
+  }
+}
+
 module.exports = {
   getDiscordOAuthUrl,
   exchangeCodeForTokens,
   getDiscordUser,
   getGuildMemberRoles,
+  getCurrentUserGuildMemberRoles,
 };

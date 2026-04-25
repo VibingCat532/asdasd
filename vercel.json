@@ -5,7 +5,10 @@
   "framework": null,
   "outputDirectory": "frontend/build",
   "functions": {
-    "api/[[...path]].js": {
+    "api/[...path].js": {
+      "includeFiles": "backend-node/src/db/schema.sql"
+    },
+    "api/index.js": {
       "includeFiles": "backend-node/src/db/schema.sql"
     }
   },

@@ -11,6 +11,7 @@ export default function HomePage() {
   const { user } = useAuth();
   const [recruitments, setRecruitments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [toast, setToast] = useState(null);
 
@@ -29,13 +30,27 @@ export default function HomePage() {
   useEffect(() => {
     axios
       .get(`${API}/recruitments`)
-      .then((res) => setRecruitments(res.data))
-      .catch(() => {})
+      .then((res) => {
+        const data = res.data;
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.recruitments)
+            ? data.recruitments
+            : [];
+
+        setRecruitments(list);
+        setLoadError(list === data || list === data?.recruitments ? null : "Nie udalo sie pobrac rekrutacji");
+      })
+      .catch(() => {
+        setRecruitments([]);
+        setLoadError("Nie udalo sie pobrac rekrutacji");
+      })
       .finally(() => setLoading(false));
   }, []);
 
-  const active = recruitments.filter((r) => r.status === "active");
-  const closed = recruitments.filter((r) => r.status === "closed");
+  const recruitmentList = Array.isArray(recruitments) ? recruitments : [];
+  const active = recruitmentList.filter((r) => r.status === "active");
+  const closed = recruitmentList.filter((r) => r.status === "closed");
 
   return (
     <div className="min-h-[calc(100vh-4rem)]">
@@ -131,7 +146,13 @@ export default function HomePage() {
               </section>
             )}
 
-            {recruitments.length === 0 && (
+            {loadError && (
+              <div className="text-center py-6 text-red-400 text-sm" data-testid="recruitments-load-error">
+                {loadError}
+              </div>
+            )}
+
+            {recruitmentList.length === 0 && (
               <div className="text-center py-20 text-zinc-500" data-testid="no-recruitments">
                 <p className="text-lg">Brak dostępnych rekrutacji</p>
               </div>

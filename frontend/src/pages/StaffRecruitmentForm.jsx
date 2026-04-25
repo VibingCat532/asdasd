@@ -34,7 +34,7 @@ const FIELD_TYPES = [
 export default function StaffRecruitmentForm() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const { user, staffInfo } = useAuth();
+  const { user, staffInfo, loading: authLoading } = useAuth();
   const isEdit = !!id;
 
   const [form, setForm] = useState({ name: "", description: "", status: "active", theme_color: "#00E5FF", scope: "", accepted_discord_role_id: "" });
@@ -162,7 +162,16 @@ export default function StaffRecruitmentForm() {
     }
   };
 
+  if (authLoading) return <div className="flex justify-center py-32"><Loader2 className="w-8 h-8 animate-spin text-[#00E5FF]" /></div>;
   if (!user) return <div className="max-w-2xl mx-auto px-4 py-20 text-center"><Lock className="w-12 h-12 text-zinc-600 mx-auto mb-4" /><p className="text-zinc-400">Zaloguj się</p></div>;
+  if (!staffInfo?.is_staff || (!isEdit && !staffInfo?.can_create_recruitment)) {
+    return (
+      <div className="max-w-2xl mx-auto px-4 py-20 text-center">
+        <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
+        <p className="text-zinc-400">Brak dostepu do tej czesci panelu.</p>
+      </div>
+    );
+  }
   if (loading) return <div className="flex justify-center py-32"><Loader2 className="w-8 h-8 animate-spin text-[#00E5FF]" /></div>;
 
   const showBasicTab = !isEdit || permLevel === "full";

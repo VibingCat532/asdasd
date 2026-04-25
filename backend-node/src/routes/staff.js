@@ -85,7 +85,7 @@ router.get('/recruitments', requireAuth, async (req, res) => {
     const capabilities = await resolveUserCapabilities(staffUser.discordId, staffUser.userId);
 
     if (!capabilities.is_staff) {
-      return res.json([]);
+      return res.status(403).json({ error: 'Brak uprawnien do panelu staff' });
     }
 
     let result;

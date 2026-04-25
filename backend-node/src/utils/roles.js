@@ -5,14 +5,43 @@ const { getGuildMemberRoles, getCurrentUserGuildMemberRoles } = require('./disco
 const { query } = require('../db');
 const logger = require('./logger');
 
-const GUILD_ID = '1495819570676760696';
+const DEFAULT_GUILD_ID = '1495819570676760696';
+const GUILD_ID = process.env.DISCORD_GUILD_ID || DEFAULT_GUILD_ID;
 
-const ROLE_MAP = {
+const DEFAULT_ROLE_MAP = {
   '1495819852097786098': 'management',
   '1495819597180567633': 'opiekun_administracji',
   '1495821859575304392': 'opiekun',
   '1495819785215414272': 'accepted_adm',
 };
+
+function parseRoleMap() {
+  if (process.env.DISCORD_ROLE_MAP) {
+    try {
+      return JSON.parse(process.env.DISCORD_ROLE_MAP);
+    } catch (err) {
+      logger.error('Invalid DISCORD_ROLE_MAP JSON', err.message);
+    }
+  }
+
+  const roleMap = { ...DEFAULT_ROLE_MAP };
+  if (process.env.DISCORD_MANAGEMENT_ROLE_ID) {
+    roleMap[process.env.DISCORD_MANAGEMENT_ROLE_ID] = 'management';
+  }
+  if (process.env.DISCORD_OPIEKUN_ROLE_ID) {
+    roleMap[process.env.DISCORD_OPIEKUN_ROLE_ID] = 'opiekun';
+  }
+  if (process.env.DISCORD_OPIEKUN_ADMINISTRACJI_ROLE_ID) {
+    roleMap[process.env.DISCORD_OPIEKUN_ADMINISTRACJI_ROLE_ID] = 'opiekun_administracji';
+  }
+  if (process.env.DISCORD_ACCEPTED_ADM_ROLE_ID) {
+    roleMap[process.env.DISCORD_ACCEPTED_ADM_ROLE_ID] = 'accepted_adm';
+  }
+
+  return roleMap;
+}
+
+const ROLE_MAP = parseRoleMap();
 
 const CACHE_TTL = 300; // 5 minutes
 const roleCache = new Map();
@@ -65,7 +94,7 @@ async function getResolvableRoles(discordId, userId) {
   const resolved = {
     roles,
     source,
-    expiresAt: now + CACHE_TTL * 1000,
+    expiresAt: now + (roles.length > 0 ? CACHE_TTL : 30) * 1000,
   };
   roleCache.set(discordId, resolved);
 
@@ -112,6 +141,8 @@ async function resolveUserCapabilities(discordId, userId) {
   return {
     discord_id: discordId,
     roles: resolvedRoles,
+    discord_role_ids: roles,
+    configured_guild_id: GUILD_ID,
     discord_role_count: roles.length,
     role_resolution_source: roleResolution.source,
     is_management: isManagement,

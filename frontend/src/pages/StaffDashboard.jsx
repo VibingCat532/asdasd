@@ -6,11 +6,11 @@ import { Loader2, Plus, ShieldCheck, Users, FileText, Settings, AlertTriangle, L
 import axios from "axios";
 import { API } from "../lib/api";
 
-
 const ROLE_LABELS = {
   management: "Management",
   opiekun: "Opiekun",
   opiekun_administracji: "Opiekun Administracji",
+  accepted_adm: "Accepted ADM",
 };
 
 export default function StaffDashboard() {
@@ -19,20 +19,31 @@ export default function StaffDashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!user || !staffInfo?.is_staff) { setLoading(false); return; }
-    axios.get(`${API}/staff/recruitments`, { withCredentials: true })
-      .then(res => setRecruitments(res.data))
-      .catch(() => {})
+    if (!user || !staffInfo?.is_staff) {
+      setLoading(false);
+      return;
+    }
+
+    axios
+      .get(`${API}/staff/recruitments`, { withCredentials: true })
+      .then((res) => setRecruitments(Array.isArray(res.data) ? res.data : []))
+      .catch(() => setRecruitments([]))
       .finally(() => setLoading(false));
   }, [user, staffInfo]);
 
-  if (authLoading) return <div className="flex justify-center py-32"><Loader2 className="w-8 h-8 animate-spin text-[#00E5FF]" /></div>;
+  if (authLoading) {
+    return (
+      <div className="flex justify-center py-32">
+        <Loader2 className="w-8 h-8 animate-spin text-[#00E5FF]" />
+      </div>
+    );
+  }
 
   if (!user) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-20 text-center" data-testid="staff-login-required">
         <Lock className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-        <p className="text-zinc-400 text-lg">Zaloguj się, aby uzyskać dostęp do panelu.</p>
+        <p className="text-zinc-400 text-lg">Zaloguj sie, aby uzyskac dostep do panelu.</p>
       </div>
     );
   }
@@ -41,87 +52,124 @@ export default function StaffDashboard() {
     return (
       <div className="max-w-2xl mx-auto px-4 py-20 text-center" data-testid="staff-no-access">
         <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-        <h2 className="text-xl font-bold text-zinc-200 mb-2" style={{ fontFamily: "'Unbounded', sans-serif" }}>Brak dostępu</h2>
-        <p className="text-zinc-400">Twoje konto Discord nie posiada roli uprawniającej do panelu staff.</p>
-        <p className="text-zinc-500 text-sm mt-2">Wymagana rola: management, opiekun lub opiekun administracji w gildii HoodStories.</p>
+        <h2 className="text-xl font-bold text-zinc-200 mb-2" style={{ fontFamily: "'Unbounded', sans-serif" }}>
+          Brak dostepu
+        </h2>
+        <p className="text-zinc-400">Twoje konto Discord nie posiada roli uprawniajacej do panelu staff.</p>
+        <p className="text-zinc-500 text-sm mt-2">
+          Wymagana rola: management, opiekun lub opiekun administracji.
+        </p>
+        <p className="text-zinc-600 text-xs mt-4" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+          Discord roles: {staffInfo?.discord_role_count ?? 0} | source: {staffInfo?.role_resolution_source || "unknown"} | guild: {staffInfo?.configured_guild_id || "unknown"}
+        </p>
       </div>
     );
   }
 
+  const mappedRoles = Array.isArray(staffInfo.roles) ? staffInfo.roles : [];
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8" data-testid="staff-dashboard">
-      {/* Header */}
       <div className="hs-animate-fade-up mb-8">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00E5FF] mb-3" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Panel Staff</p>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00E5FF] mb-3" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+          Panel Staff
+        </p>
         <div className="flex flex-wrap items-center gap-3 mb-4">
           <h1 className="text-2xl sm:text-3xl font-bold tracking-tight uppercase" style={{ fontFamily: "'Unbounded', sans-serif", color: "#FAFAFA" }} data-testid="staff-title">
             Dashboard
           </h1>
-          {staffInfo.app_roles?.map(role => (
+          {mappedRoles.map((role) => (
             <Badge key={role} className="bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30 text-xs font-mono uppercase">
               {ROLE_LABELS[role] || role}
             </Badge>
           ))}
         </div>
 
+        <p className="text-xs text-zinc-500 mb-4" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+          Discord roles: {staffInfo.discord_role_count ?? 0} | source: {staffInfo.role_resolution_source || "unknown"} | guild: {staffInfo.configured_guild_id || "unknown"}
+        </p>
+
         {staffInfo.can_create_recruitment ? (
-          <Link to="/staff/recruitments/new"
+          <Link
+            to="/staff/recruitments/new"
             className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-[#00E5FF] text-black hover:bg-[#00E5FF]/90 transition-colors"
-            data-testid="create-recruitment-button">
+            data-testid="create-recruitment-button"
+          >
             <Plus className="w-4 h-4" /> Nowa Rekrutacja
           </Link>
         ) : staffInfo.creation_limit_reached ? (
-          <p className="text-sm text-zinc-500" data-testid="creation-limit-reached">Osiągnięto limit rekrutacji (max 1 dla opiekuna)</p>
+          <p className="text-sm text-zinc-500" data-testid="creation-limit-reached">
+            Osiagnieto limit rekrutacji (max 1 dla opiekuna)
+          </p>
         ) : null}
       </div>
 
-      {/* Recruitments */}
       {loading ? (
-        <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-[#00E5FF]" /></div>
+        <div className="flex justify-center py-16">
+          <Loader2 className="w-8 h-8 animate-spin text-[#00E5FF]" />
+        </div>
       ) : recruitments.length === 0 ? (
         <div className="text-center py-16 rounded-xl bg-[#0F0F13] border border-white/5" data-testid="no-staff-recruitments">
           <ShieldCheck className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
-          <p className="text-zinc-400">Brak dostępnych rekrutacji</p>
+          <p className="text-zinc-400">Brak dostepnych rekrutacji</p>
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2" data-testid="staff-recruitments-list">
-          {recruitments.map(rec => (
+          {recruitments.map((rec) => (
             <div key={rec.id} className="rounded-xl bg-[#141418] border border-white/10 p-5 group" data-testid={`staff-rec-${rec.slug}`}>
               <div className="flex items-start justify-between gap-3 mb-3">
                 <div>
                   <div className="h-0.5 w-10 rounded-full mb-2" style={{ background: rec.theme_color }} />
-                  <h3 className="text-base font-semibold text-zinc-200" style={{ fontFamily: "'Outfit', sans-serif" }}>{rec.name}</h3>
+                  <h3 className="text-base font-semibold text-zinc-200" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                    {rec.name}
+                  </h3>
                 </div>
                 <div className="flex gap-1.5 shrink-0">
-                  <Badge className={rec.status === 'active'
-                    ? "bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30 text-xs font-mono uppercase"
-                    : "bg-zinc-800/50 text-zinc-500 border border-zinc-700/30 text-xs font-mono uppercase"}>
-                    {rec.status === 'active' ? 'aktywna' : 'zamknięta'}
+                  <Badge
+                    className={
+                      rec.status === "active"
+                        ? "bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30 text-xs font-mono uppercase"
+                        : "bg-zinc-800/50 text-zinc-500 border border-zinc-700/30 text-xs font-mono uppercase"
+                    }
+                  >
+                    {rec.status === "active" ? "aktywna" : "zamknieta"}
                   </Badge>
-                  <Badge className={rec.permission_level === 'full'
-                    ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-mono uppercase"
-                    : "bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs font-mono uppercase"}>
-                    {rec.permission_level === 'full' ? 'pełny' : 'recenzent'}
+                  <Badge
+                    className={
+                      rec.permission_level === "full"
+                        ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-mono uppercase"
+                        : "bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs font-mono uppercase"
+                    }
+                  >
+                    {rec.permission_level === "full" ? "pelny" : "recenzent"}
                   </Badge>
                 </div>
               </div>
 
               <div className="flex items-center gap-4 mb-4 text-xs text-zinc-500" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {rec.app_count} aplikacji</span>
+                <span className="flex items-center gap-1">
+                  <Users className="w-3 h-3" /> {rec.app_count} aplikacji
+                </span>
                 {rec.pending_count > 0 && (
-                  <span className="flex items-center gap-1 text-[#00E5FF]"><FileText className="w-3 h-3" /> {rec.pending_count} nowych</span>
+                  <span className="flex items-center gap-1 text-[#00E5FF]">
+                    <FileText className="w-3 h-3" /> {rec.pending_count} nowych
+                  </span>
                 )}
               </div>
 
               <div className="flex gap-2">
-                <Link to={`/staff/recruitments/${rec.id}/applications`}
+                <Link
+                  to={`/staff/recruitments/${rec.id}/applications`}
                   className="flex-1 text-center px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-zinc-300 hover:bg-white/10 transition-colors"
-                  data-testid={`review-apps-${rec.slug}`}>
+                  data-testid={`review-apps-${rec.slug}`}
+                >
                   <FileText className="w-3 h-3 inline mr-1" />Aplikacje
                 </Link>
-                <Link to={`/staff/recruitments/${rec.id}/edit`}
+                <Link
+                  to={`/staff/recruitments/${rec.id}/edit`}
                   className="flex-1 text-center px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-zinc-300 hover:bg-white/10 transition-colors"
-                  data-testid={`edit-rec-${rec.slug}`}>
+                  data-testid={`edit-rec-${rec.slug}`}
+                >
                   <Settings className="w-3 h-3 inline mr-1" />Edytuj
                 </Link>
               </div>

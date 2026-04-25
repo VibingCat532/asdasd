@@ -77,11 +77,16 @@ export default function RecruitmentDetailPage() {
     if (!validateClient()) return;
     setSubmitting(true);
     try {
-      await axios.post(`${API}/recruitments/${id}/apply`, { answers }, { withCredentials: true });
+      await axios.post(`${API}/applications/${id}`, { answers }, { withCredentials: true });
       setSubmitted(true);
     } catch (err) {
-      const detail = err.response?.data?.detail;
-      if (typeof detail === "string") {
+      const data = err.response?.data;
+      const detail = data?.detail;
+      if (Array.isArray(data?.errors)) {
+        setErrors(data.errors);
+      } else if (typeof data?.error === "string") {
+        setErrors([data.error]);
+      } else if (typeof detail === "string") {
         setErrors([detail]);
       } else if (detail?.errors) {
         setErrors(detail.errors);

@@ -27,7 +27,7 @@ export default function ApplicationDetailPage() {
       return;
     }
     axios
-      .get(`${API}/my-applications/${id}`, { withCredentials: true })
+      .get(`${API}/applications/${id}`, { withCredentials: true })
       .then((res) => setApplication(res.data))
       .catch((err) => setError(err.response?.data?.detail || "Nie udało się załadować aplikacji"))
       .finally(() => setLoading(false));

@@ -25,8 +25,8 @@ export default function MyApplicationsPage() {
       return;
     }
     axios
-      .get(`${API}/my-applications`, { withCredentials: true })
-      .then((res) => setApplications(res.data))
+      .get(`${API}/applications`, { withCredentials: true })
+      .then((res) => setApplications(Array.isArray(res.data) ? res.data : []))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [user]);

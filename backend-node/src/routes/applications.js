@@ -12,7 +12,7 @@ const router = express.Router();
  * POST /api/applications/:recruitmentId
  * Submit a new application
  */
-router.post('/:recruitmentId', requireAuth, async (req, res) => {
+async function submitApplication(req, res) {
   const { recruitmentId } = req.params;
   const { answers } = req.body;
   const userId = req.userId;
@@ -133,7 +133,9 @@ router.post('/:recruitmentId', requireAuth, async (req, res) => {
     logger.error('Failed to submit application', err);
     res.status(500).json({ error: 'Nie udało się przesłać aplikacji' });
   }
-});
+}
+
+router.post('/:recruitmentId', requireAuth, submitApplication);
 
 /**
  * GET /api/applications
@@ -221,3 +223,4 @@ router.get('/:applicationId', requireAuth, async (req, res) => {
 });
 
 module.exports = router;
+module.exports.submitApplication = submitApplication;

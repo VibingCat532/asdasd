@@ -3,10 +3,13 @@
  */
 const express = require('express');
 const { query } = require('../db');
-const { getUserIdFromRequest } = require('../utils/auth');
+const applicationRoutes = require('./applications');
+const { getUserIdFromRequest, requireAuth } = require('../utils/auth');
 const logger = require('../utils/logger');
 
 const router = express.Router();
+
+router.post('/:recruitmentId/apply', requireAuth, applicationRoutes.submitApplication);
 
 /**
  * GET /api/recruitments

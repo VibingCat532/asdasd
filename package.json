@@ -7,6 +7,6 @@
   },
   "scripts": {
     "build": "yarn --cwd frontend build",
-    "install:all": "cd backend-node && npm ci && cd .. && yarn install --cwd frontend --ignore-engines"
+    "install:all": "cd backend-node && npm ci && cd .. && yarn install --cwd frontend --ignore-engines --production=false --frozen-lockfile"
   }
 }

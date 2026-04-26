@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { Badge } from "../components/ui/badge";
-import { Loader2, Plus, ShieldCheck, Users, FileText, Settings, AlertTriangle, Lock } from "lucide-react";
+import { Loader2, Plus, ShieldCheck, Users, FileText, Settings, AlertTriangle, Lock, Trash2 } from "lucide-react";
 import axios from "axios";
 import { API } from "../lib/api";
 
@@ -14,9 +14,10 @@ const ROLE_LABELS = {
 };
 
 export default function StaffDashboard() {
-  const { user, staffInfo, loading: authLoading } = useAuth();
+  const { user, staffInfo, loading: authLoading, refetchStaff } = useAuth();
   const [recruitments, setRecruitments] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [deletingId, setDeletingId] = useState(null);
 
   useEffect(() => {
     if (!user || !staffInfo?.is_staff) {
@@ -24,6 +25,7 @@ export default function StaffDashboard() {
       return;
     }
 
+    setLoading(true);
     axios
       .get(`${API}/staff/recruitments`, { withCredentials: true })
       .then((res) => setRecruitments(Array.isArray(res.data) ? res.data : []))
@@ -67,6 +69,21 @@ export default function StaffDashboard() {
   }
 
   const mappedRoles = Array.isArray(staffInfo.roles) ? staffInfo.roles : [];
+
+  const handleDeleteRecruitment = async (rec) => {
+    if (!window.confirm('Usunac rekrutacje "' + rec.name + '"?')) return;
+
+    setDeletingId(rec.id);
+    try {
+      await axios.delete(API + "/staff/recruitments/" + rec.id, { withCredentials: true });
+      setRecruitments(prev => prev.filter(item => item.id !== rec.id));
+      refetchStaff?.();
+    } catch (err) {
+      window.alert(err.response?.data?.error || "Nie udalo sie usunac rekrutacji");
+    } finally {
+      setDeletingId(null);
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8" data-testid="staff-dashboard">
@@ -172,6 +189,17 @@ export default function StaffDashboard() {
                 >
                   <Settings className="w-3 h-3 inline mr-1" />Edytuj
                 </Link>
+                {rec.can_delete_recruitment && (
+                  <button
+                    onClick={() => handleDeleteRecruitment(rec)}
+                    disabled={deletingId === rec.id}
+                    className="px-3 py-2 rounded-lg text-xs font-medium bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+                    data-testid={"delete-rec-" + rec.slug}
+                    title="Usun rekrutacje"
+                  >
+                    {deletingId === rec.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
+                  </button>
+                )}
               </div>
             </div>
           ))}

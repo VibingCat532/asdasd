@@ -108,18 +108,6 @@ async function getRecruitmentPermission(staffUser, recruitmentId) {
     };
   }
 
-  if (recruitment.scope === 'administracja' && capabilities.is_opiekun_administracji) {
-    return {
-      hasAccess: true,
-      canEditRecruitment: false,
-      canEditQuestions: false,
-      canReviewApplications: true,
-      canManageAccess: false,
-      permissionLevel: 'reviewer',
-      capabilities,
-    };
-  }
-
   return { hasAccess: false, capabilities };
 }
 
@@ -235,10 +223,9 @@ router.get('/recruitments', requireAuth, async (req, res) => {
          LEFT JOIN recruitment_access ra ON ra.recruitment_id = r.id AND ra.user_id = $1
          WHERE r.creator_id = $1
             OR r.id IN (SELECT recruitment_id FROM recruitment_access WHERE user_id = $1)
-            OR (r.scope = 'administracja' AND $2)
          GROUP BY r.id, ra.can_edit_questions, ra.can_review_applications
          ORDER BY r.created_at DESC`,
-        [staffUser.userId, capabilities.is_opiekun_administracji]
+        [staffUser.userId]
       );
     }
 
@@ -267,6 +254,7 @@ router.get('/recruitments', requireAuth, async (req, res) => {
         app_count: parseInt(r.app_count, 10),
         pending_count: parseInt(r.pending_count, 10),
         created_at: r.created_at.toISOString(),
+        can_delete_recruitment: capabilities.is_management,
       };
     });
 
@@ -290,20 +278,25 @@ router.post('/recruitments', requireAuth, async (req, res) => {
 
     const capabilities = await resolveUserCapabilities(staffUser.discordId, staffUser.userId);
 
-    if (!capabilities.can_create_recruitment) {
-      if (capabilities.is_opiekun_administracji) {
-        return res.status(403).json({
-          error: 'Opiekun administracji nie może tworzyć rekrutacji',
-        });
-      }
-      if (capabilities.creation_limit_reached) {
-        return res.status(403).json({
-          error: 'Osiągnięto limit rekrutacji (max 1 dla opiekuna)',
-        });
-      }
+    if (!capabilities.is_management && !capabilities.is_opiekun) {
       return res.status(403).json({
-        error: 'Brak uprawnień do tworzenia rekrutacji',
+        error: capabilities.is_opiekun_administracji
+          ? 'Opiekun administracji nie moze tworzyc rekrutacji'
+          : 'Brak uprawnien do tworzenia rekrutacji',
       });
+    }
+
+    if (!capabilities.is_management) {
+      const createdResult = await query(
+        'SELECT COUNT(*) as count FROM recruitments WHERE creator_id = $1',
+        [staffUser.userId]
+      );
+      const createdCount = parseInt(createdResult.rows[0]?.count || 0, 10);
+      if (createdCount >= 1) {
+        return res.status(403).json({
+          error: 'Osiagnieto limit rekrutacji (max 1 na osobe z ranga opiekun)',
+        });
+      }
     }
 
     const { name, description, status = 'active', theme_color = '#00E5FF', scope = null, accepted_discord_role_id = null, questions = [] } = req.body;
@@ -437,9 +430,14 @@ router.post('/recruitments/:recruitmentId/access', requireAuth, async (req, res)
 
     const { recruitmentId } = req.params;
     const { user_id, can_edit_questions = false, can_review_applications = true } = req.body;
+    const canEditQuestions = !!can_edit_questions;
+    const canReviewApplications = !!can_review_applications;
     const permission = await getRecruitmentPermission(staffUser, recruitmentId);
     if (!permission.canManageAccess) {
       return res.status(403).json({ error: 'Brak uprawnien do zarzadzania dostepem' });
+    }
+    if (!canEditQuestions && !canReviewApplications) {
+      return res.status(422).json({ error: 'Wybierz przynajmniej jedna permisje' });
     }
 
     await query(
@@ -448,7 +446,7 @@ router.post('/recruitments/:recruitmentId/access', requireAuth, async (req, res)
        ON CONFLICT (recruitment_id, user_id) DO UPDATE SET
          can_edit_questions = EXCLUDED.can_edit_questions,
          can_review_applications = EXCLUDED.can_review_applications`,
-      [recruitmentId, user_id, !!can_edit_questions, !!can_review_applications]
+      [recruitmentId, user_id, canEditQuestions, canReviewApplications]
     );
 
     res.status(201).json({ success: true });
@@ -467,16 +465,21 @@ router.patch('/recruitments/:recruitmentId/access/:userId', requireAuth, async (
 
     const { recruitmentId, userId } = req.params;
     const { can_edit_questions = false, can_review_applications = true } = req.body;
+    const canEditQuestions = !!can_edit_questions;
+    const canReviewApplications = !!can_review_applications;
     const permission = await getRecruitmentPermission(staffUser, recruitmentId);
     if (!permission.canManageAccess) {
       return res.status(403).json({ error: 'Brak uprawnien do zarzadzania dostepem' });
+    }
+    if (!canEditQuestions && !canReviewApplications) {
+      return res.status(422).json({ error: 'Wybierz przynajmniej jedna permisje' });
     }
 
     await query(
       `UPDATE recruitment_access
        SET can_edit_questions = $1, can_review_applications = $2
        WHERE recruitment_id = $3 AND user_id = $4`,
-      [!!can_edit_questions, !!can_review_applications, recruitmentId, userId]
+      [canEditQuestions, canReviewApplications, recruitmentId, userId]
     );
 
     res.json({ success: true });
@@ -556,6 +559,7 @@ router.get('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
       can_edit_questions: permission.canEditQuestions,
       can_review_applications: permission.canReviewApplications,
       can_manage_access: permission.canManageAccess,
+      can_delete_recruitment: permission.capabilities?.is_management === true,
       questions: questionsResult.rows.map(q => ({
         id: q.id,
         label: q.label,
@@ -815,9 +819,12 @@ router.delete('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
 
     const { recruitmentId } = req.params;
 
-    await query('DELETE FROM recruitments WHERE id = $1', [recruitmentId]);
+    const result = await query('DELETE FROM recruitments WHERE id = $1 RETURNING id', [recruitmentId]);
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Rekrutacja nie znaleziona' });
+    }
 
-    res.json({ success: true, message: 'Rekrutacja usunięta' });
+    res.json({ success: true, message: 'Rekrutacja usunieta' });
   } catch (err) {
     logger.error('Failed to delete recruitment', err);
     res.status(500).json({ error: 'Nie udało się usunąć rekrutacji' });

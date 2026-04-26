@@ -131,12 +131,10 @@ async function resolveUserCapabilities(discordId, userId) {
 
   const canCreateRecruitment =
     isManagement ||
-    (isOpiekun && recruitmentCount < 1) ||
-    (isOpiekunAdministracji && recruitmentCount < 1);
+    (isOpiekun && recruitmentCount < 1);
 
   const creationLimitReached =
-    (isOpiekun && recruitmentCount >= 1) ||
-    (isOpiekunAdministracji && recruitmentCount >= 1);
+    !isManagement && isOpiekun && recruitmentCount >= 1;
 
   return {
     discord_id: discordId,

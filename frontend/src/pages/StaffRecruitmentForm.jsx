@@ -31,6 +31,8 @@ const FIELD_TYPES = [
   { value: "multi_choice", label: "Wielokrotny wybór" },
 ];
 
+
+const DEFAULT_ACCESS = { can_edit_questions: false, can_review_applications: true };
 export default function StaffRecruitmentForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -42,6 +44,7 @@ export default function StaffRecruitmentForm() {
   const [accessUsers, setAccessUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [searchQ, setSearchQ] = useState("");
+  const [pendingAccess, setPendingAccess] = useState({});
   const [permLevel, setPermLevel] = useState("full");
   const [permissions, setPermissions] = useState({
     canEditRecruitment: !isEdit,
@@ -102,6 +105,7 @@ export default function StaffRecruitmentForm() {
   useEffect(() => { if (isEdit && permissions.canManageAccess) fetchUsers(); }, [isEdit, permissions.canManageAccess, fetchUsers]);
 
   const updateForm = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
+  const getApiError = (err, fallback) => err.response?.data?.error || err.response?.data?.detail || fallback;
 
   // Questions
   const addQuestion = () => {
@@ -139,31 +143,64 @@ export default function StaffRecruitmentForm() {
   };
 
   // Access
-  const addAccess = async (userId) => {
-    try {
-      await axios.post(`${API}/staff/recruitments/${id}/access`, {
-        user_id: userId,
-        can_edit_questions: false,
-        can_review_applications: true,
-      }, { withCredentials: true });
-      fetchAccess();
-    } catch {}
+  const getPendingAccess = (userId) => pendingAccess[userId] || DEFAULT_ACCESS;
+
+  const updatePendingAccess = (userId, patch) => {
+    setPendingAccess(prev => ({
+      ...prev,
+      [userId]: { ...DEFAULT_ACCESS, ...(prev[userId] || {}), ...patch },
+    }));
   };
+
+  const addAccess = async (userId) => {
+    const access = getPendingAccess(userId);
+    if (!access.can_edit_questions && !access.can_review_applications) {
+      setErrors(["Wybierz przynajmniej jedna permisje"]);
+      return;
+    }
+
+    try {
+      await axios.post(API + "/staff/recruitments/" + id + "/access", {
+        user_id: userId,
+        can_edit_questions: !!access.can_edit_questions,
+        can_review_applications: !!access.can_review_applications,
+      }, { withCredentials: true });
+      setPendingAccess(prev => {
+        const next = { ...prev };
+        delete next[userId];
+        return next;
+      });
+      fetchAccess();
+    } catch (err) {
+      setErrors([getApiError(err, "Nie udalo sie dodac dostepu")]);
+    }
+  };
+
   const updateAccess = async (accessUser, patch) => {
     const next = { ...accessUser, ...patch };
+    if (!next.can_edit_questions && !next.can_review_applications) {
+      setErrors(["Uzytkownik musi miec przynajmniej jedna permisje"]);
+      return;
+    }
+
     try {
-      await axios.patch(`${API}/staff/recruitments/${id}/access/${accessUser.id}`, {
+      await axios.patch(API + "/staff/recruitments/" + id + "/access/" + accessUser.id, {
         can_edit_questions: !!next.can_edit_questions,
         can_review_applications: !!next.can_review_applications,
       }, { withCredentials: true });
       setAccessUsers(prev => prev.map(u => u.id === accessUser.id ? next : u));
-    } catch {}
+    } catch (err) {
+      setErrors([getApiError(err, "Nie udalo sie zaktualizowac dostepu")]);
+    }
   };
+
   const removeAccess = async (userId) => {
     try {
-      await axios.delete(`${API}/staff/recruitments/${id}/access/${userId}`, { withCredentials: true });
+      await axios.delete(API + "/staff/recruitments/" + id + "/access/" + userId, { withCredentials: true });
       fetchAccess();
-    } catch {}
+    } catch (err) {
+      setErrors([getApiError(err, "Nie udalo sie usunac dostepu")]);
+    }
   };
 
   // Save
@@ -190,8 +227,7 @@ export default function StaffRecruitmentForm() {
         navigate("/staff");
       }
     } catch (err) {
-      const detail = err.response?.data?.detail;
-      setErrors([typeof detail === "string" ? detail : "Wystąpił błąd"]);
+      setErrors([getApiError(err, "Wystapil blad")]);
     } finally {
       setSaving(false);
     }
@@ -363,17 +399,66 @@ export default function StaffRecruitmentForm() {
         {showAccessTab && (
           <TabsContent value="access" className="space-y-4">
             <div>
-              <Label className="text-zinc-300 mb-1.5 block text-sm">Dodaj użytkownika</Label>
+              <Label className="text-zinc-300 mb-1.5 block text-sm">Dodaj uzytkownika</Label>
               <Input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Szukaj po nazwie Discord..."
                 className="bg-black/40 border-white/10 text-zinc-100 mb-3" data-testid="access-search" />
               {availableUsers.length > 0 && (
-                <div className="space-y-1.5 max-h-48 overflow-y-auto rounded-lg border border-white/5 p-2">
-                  {availableUsers.map(u => (
-                    <button key={u.id} onClick={() => addAccess(u.id)}
-                      className="w-full flex items-center gap-3 p-2 rounded-lg hover:bg-white/5 transition-colors text-left"
-                      data-testid={`add-user-${u.discord_username}`}>
-                      <Avatar className="w-7 h-7 border border-white/10">
-                        <AvatarImage src={u.discord_avatar ? `https://cdn.discordapp.com/avatars/${u.discord_id}/${u.discord_avatar}.png?size=64` : undefined} />
+                <div className="space-y-2 max-h-64 overflow-y-auto rounded-lg border border-white/5 p-2">
+                  {availableUsers.map(u => {
+                    const selected = getPendingAccess(u.id);
+                    return (
+                      <div key={u.id}
+                        className="flex items-center gap-3 p-2 rounded-lg bg-white/[0.02] border border-white/5"
+                        data-testid={"add-user-" + u.discord_username}>
+                        <Avatar className="w-7 h-7 border border-white/10">
+                          <AvatarImage src={u.discord_avatar ? "https://cdn.discordapp.com/avatars/" + u.discord_id + "/" + u.discord_avatar + ".png?size=64" : undefined} />
+                          <AvatarFallback className="bg-zinc-900 text-zinc-400 text-xs">{(u.discord_global_name||u.discord_username||"?")[0].toUpperCase()}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm text-zinc-200 truncate">{u.discord_global_name || u.discord_username}</p>
+                          <p className="text-xs text-zinc-500">@{u.discord_username}</p>
+                          <div className="flex flex-wrap gap-4 mt-2">
+                            <label className="flex items-center gap-2 text-xs text-zinc-400">
+                              <Checkbox
+                                checked={!!selected.can_edit_questions}
+                                onCheckedChange={v => updatePendingAccess(u.id, { can_edit_questions: !!v })}
+                                className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
+                              />
+                              Moze edytowac pytania
+                            </label>
+                            <label className="flex items-center gap-2 text-xs text-zinc-400">
+                              <Checkbox
+                                checked={!!selected.can_review_applications}
+                                onCheckedChange={v => updatePendingAccess(u.id, { can_review_applications: !!v })}
+                                className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
+                              />
+                              Moze sprawdzac aplikacje
+                            </label>
+                          </div>
+                        </div>
+                        <button onClick={() => addAccess(u.id)}
+                          className="p-2 rounded-lg bg-[#00E5FF]/10 text-[#00E5FF] hover:bg-[#00E5FF]/20 transition-colors"
+                          data-testid={"confirm-add-user-" + u.discord_username}
+                          title="Dodaj uzytkownika">
+                          <UserPlus className="w-4 h-4" />
+                        </button>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+            <Separator className="border-white/5" />
+            <div>
+              <Label className="text-zinc-300 mb-2 block text-sm">Uzytkownicy z dostepem ({accessUsers.length})</Label>
+              {accessUsers.length === 0 ? (
+                <p className="text-sm text-zinc-500">Brak dodanych uzytkownikow</p>
+              ) : (
+                <div className="space-y-2" data-testid="access-users-list">
+                  {accessUsers.map(u => (
+                    <div key={u.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.02] border border-white/5" data-testid={"access-user-" + u.discord_username}>
+                      <Avatar className="w-8 h-8 border border-white/10">
+                        <AvatarImage src={u.discord_avatar ? "https://cdn.discordapp.com/avatars/" + u.discord_id + "/" + u.discord_avatar + ".png?size=64" : undefined} />
                         <AvatarFallback className="bg-zinc-900 text-zinc-400 text-xs">{(u.discord_global_name||u.discord_username||"?")[0].toUpperCase()}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
@@ -398,30 +483,7 @@ export default function StaffRecruitmentForm() {
                           </label>
                         </div>
                       </div>
-                      <UserPlus className="w-4 h-4 text-zinc-500" />
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-            <Separator className="border-white/5" />
-            <div>
-              <Label className="text-zinc-300 mb-2 block text-sm">Użytkownicy z dostępem ({accessUsers.length})</Label>
-              {accessUsers.length === 0 ? (
-                <p className="text-sm text-zinc-500">Brak dodanych użytkowników</p>
-              ) : (
-                <div className="space-y-2" data-testid="access-users-list">
-                  {accessUsers.map(u => (
-                    <div key={u.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.02] border border-white/5" data-testid={`access-user-${u.discord_username}`}>
-                      <Avatar className="w-8 h-8 border border-white/10">
-                        <AvatarImage src={u.discord_avatar ? `https://cdn.discordapp.com/avatars/${u.discord_id}/${u.discord_avatar}.png?size=64` : undefined} />
-                        <AvatarFallback className="bg-zinc-900 text-zinc-400 text-xs">{(u.discord_global_name||u.discord_username||"?")[0].toUpperCase()}</AvatarFallback>
-                      </Avatar>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm text-zinc-200 truncate">{u.discord_global_name || u.discord_username}</p>
-                        <p className="text-xs text-zinc-500">@{u.discord_username}</p>
-                      </div>
-                      <button onClick={() => removeAccess(u.id)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors" data-testid={`remove-user-${u.discord_username}`}>
+                      <button onClick={() => removeAccess(u.id)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors" data-testid={"remove-user-" + u.discord_username}>
                         <X className="w-4 h-4" />
                       </button>
                     </div>

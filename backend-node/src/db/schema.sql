@@ -59,7 +59,7 @@ CREATE TABLE IF NOT EXISTS recruitment_questions (
 -- Applications
 CREATE TABLE IF NOT EXISTS applications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    recruitment_id UUID NOT NULL REFERENCES recruitments(id),
+    recruitment_id UUID NOT NULL REFERENCES recruitments(id) ON DELETE CASCADE,
     user_id UUID NOT NULL REFERENCES users(id),
     status TEXT NOT NULL DEFAULT 'nowe',
     questions_snapshot JSONB NOT NULL,
@@ -94,6 +94,22 @@ ADD COLUMN IF NOT EXISTS can_edit_questions BOOLEAN NOT NULL DEFAULT false;
 
 ALTER TABLE recruitment_access
 ADD COLUMN IF NOT EXISTS can_review_applications BOOLEAN NOT NULL DEFAULT true;
+
+DO $$
+BEGIN
+    IF EXISTS (
+        SELECT 1
+        FROM information_schema.table_constraints
+        WHERE constraint_name = 'applications_recruitment_id_fkey'
+          AND table_name = 'applications'
+    ) THEN
+        ALTER TABLE applications DROP CONSTRAINT applications_recruitment_id_fkey;
+    END IF;
+
+    ALTER TABLE applications
+    ADD CONSTRAINT applications_recruitment_id_fkey
+    FOREIGN KEY (recruitment_id) REFERENCES recruitments(id) ON DELETE CASCADE;
+END $$;
 
 -- Indexes
 CREATE INDEX IF NOT EXISTS idx_applications_user_recruitment ON applications(user_id, recruitment_id);

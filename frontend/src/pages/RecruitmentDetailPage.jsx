@@ -13,6 +13,8 @@ import axios from "axios";
 import { API } from "../lib/api";
 
 const CODE_FILE_MAX_BYTES = 512 * 1024;
+const CODE_FILE_MAX_FILES = 10;
+const CODE_FILE_MAX_TOTAL_BYTES = 5 * 1024 * 1024;
 const CODE_FILE_ACCEPT = ".lua,.js,.jsx,.ts,.tsx,.py,.java,.cs,.cpp,.c,.h,.hpp,.php,.rb,.go,.rs,.json,.html,.css,.scss,.sql,.txt";
 
 function inferCodeLanguage(filename = "") {
@@ -100,7 +102,8 @@ export default function RecruitmentDetailPage() {
         if (q.field_type === "multi_choice") {
           if (!val || val.length === 0) errs.push(`Pole "${q.label}" jest wymagane`);
         } else if (q.field_type === "code") {
-          if (!val?.content?.trim()) errs.push(`Pole "${q.label}" jest wymagane`);
+          const files = Array.isArray(val) ? val : val?.content ? [val] : [];
+          if (files.length === 0 || !files.some(file => file.content?.trim())) errs.push(`Pole "${q.label}" jest wymagane`);
         } else {
           if (!val || !String(val).trim()) errs.push(`Pole "${q.label}" jest wymagane`);
         }
@@ -341,33 +344,54 @@ function QuestionField({ question, value, onChange, onToggle }) {
   const q = question;
   const id = `q-${q.id}`;
   const [fileError, setFileError] = useState(null);
+  const codeFiles = Array.isArray(value) ? value : value?.content ? [value] : [];
 
   const handleCodeFile = async (event) => {
-    const file = event.target.files?.[0];
+    const files = Array.from(event.target.files || []);
     setFileError(null);
 
-    if (!file) {
+    if (files.length === 0) {
       return;
     }
 
-    if (file.size > CODE_FILE_MAX_BYTES) {
-      setFileError("Plik jest za duży. Maksymalny rozmiar to 512 KB.");
+    if (codeFiles.length + files.length > CODE_FILE_MAX_FILES) {
+      setFileError(`Możesz załączyć maksymalnie ${CODE_FILE_MAX_FILES} plików.`);
+      event.target.value = "";
+      return;
+    }
+
+    const oversized = files.find(file => file.size > CODE_FILE_MAX_BYTES);
+    if (oversized) {
+      setFileError(`Plik "${oversized.name}" jest za duży. Maksymalny rozmiar to 512 KB.`);
+      event.target.value = "";
+      return;
+    }
+
+    const totalSize = codeFiles.reduce((sum, file) => sum + (file.size || 0), 0) + files.reduce((sum, file) => sum + file.size, 0);
+    if (totalSize > CODE_FILE_MAX_TOTAL_BYTES) {
+      setFileError("Łączny rozmiar plików nie może przekroczyć 5 MB.");
       event.target.value = "";
       return;
     }
 
     try {
-      const content = await file.text();
-      onChange({
+      const nextFiles = await Promise.all(files.map(async (file) => ({
         filename: file.name,
         language: inferCodeLanguage(file.name),
         size: file.size,
-        content,
-      });
+        content: await file.text(),
+      })));
+      onChange([...codeFiles, ...nextFiles]);
     } catch {
       setFileError("Nie udało się odczytać pliku.");
+    } finally {
       event.target.value = "";
     }
+  };
+
+  const removeCodeFile = (index) => {
+    const nextFiles = codeFiles.filter((_, fileIndex) => fileIndex !== index);
+    onChange(nextFiles.length > 0 ? nextFiles : "");
   };
 
   return (
@@ -455,34 +479,42 @@ function QuestionField({ question, value, onChange, onToggle }) {
           >
             <Upload className="w-5 h-5 text-[#00E5FF]" />
             <span className="text-sm font-medium text-zinc-300">
-              {value?.filename ? "Zmień plik z kodem" : "Wybierz plik z kodem"}
+              {codeFiles.length > 0 ? "Dodaj kolejne pliki z kodem" : "Wybierz pliki z kodem"}
             </span>
-            <span className="text-xs text-zinc-600">Lua, JS, TS, Python, C++, HTML, CSS, JSON i inne, max 512 KB</span>
+            <span className="text-xs text-zinc-600">Lua, JS, TS, Python, C++, HTML, CSS, JSON i inne, max 512 KB na plik</span>
           </label>
           <input
             id={id}
             type="file"
+            multiple
             accept={CODE_FILE_ACCEPT}
             onChange={handleCodeFile}
             className="hidden"
             data-testid={`code-file-${q.id}`}
           />
           {fileError && <p className="text-xs text-red-400">{fileError}</p>}
-          {value?.filename && (
-            <div className="flex items-center gap-3 rounded-lg border border-white/5 bg-black/20 px-3 py-2">
-              <FileCode className="w-4 h-4 text-[#00E5FF] shrink-0" />
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-zinc-200">{value.filename}</p>
-                <p className="text-xs text-zinc-600">{value.language || inferCodeLanguage(value.filename)} · {formatBytes(value.size || value.content?.length || 0)}</p>
+          {codeFiles.length > 0 && (
+            <div className="space-y-2">
+              {codeFiles.map((file, index) => (
+                <div key={`${file.filename}-${index}`} className="flex items-center gap-3 rounded-lg border border-white/5 bg-black/20 px-3 py-2">
+                  <FileCode className="w-4 h-4 text-[#00E5FF] shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm text-zinc-200">{file.filename}</p>
+                    <p className="text-xs text-zinc-600">{file.language || inferCodeLanguage(file.filename)} · {formatBytes(file.size || file.content?.length || 0)}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => removeCodeFile(index)}
+                    className="p-1.5 text-zinc-500 hover:text-red-400"
+                    title="Usuń plik"
+                  >
+                    <X className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+              <div className="text-xs text-zinc-600">
+                {codeFiles.length}/{CODE_FILE_MAX_FILES} plików · {formatBytes(codeFiles.reduce((sum, file) => sum + (file.size || 0), 0))}/5 MB
               </div>
-              <button
-                type="button"
-                onClick={() => onChange("")}
-                className="p-1.5 text-zinc-500 hover:text-red-400"
-                title="Usuń plik"
-              >
-                <X className="w-4 h-4" />
-              </button>
             </div>
           )}
         </div>

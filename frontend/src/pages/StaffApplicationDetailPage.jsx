@@ -15,22 +15,26 @@ const STATUS_CFG = {
   odrzucone: { label: "Odrzucone", cls: "bg-red-500/15 text-red-400 border border-red-500/30" },
 };
 
-function parseCodeAnswer(answerValue) {
-  if (!answerValue) return null;
+function normalizeCodeFile(file) {
+  if (!file || typeof file !== "object" || typeof file.content !== "string") return null;
+  return {
+    filename: file.filename || "code.txt",
+    language: file.language || "Code",
+    size: file.size || file.content.length,
+    content: file.content,
+  };
+}
+
+function parseCodeFiles(answerValue) {
+  if (!answerValue) return [];
   try {
     const parsed = JSON.parse(answerValue);
-    if (parsed && typeof parsed === "object" && typeof parsed.content === "string") {
-      return {
-        filename: parsed.filename || "code.txt",
-        language: parsed.language || "Code",
-        size: parsed.size || parsed.content.length,
-        content: parsed.content,
-      };
-    }
+    const files = Array.isArray(parsed) ? parsed : [parsed];
+    return files.map(normalizeCodeFile).filter(Boolean);
   } catch {
     // keep as plain answer
   }
-  return null;
+  return [];
 }
 
 function formatBytes(bytes = 0) {
@@ -163,7 +167,7 @@ export default function StaffApplicationDetailPage() {
         {(app.questions_snapshot || []).map(q => {
           const ans = answerMap[q.id];
           let displayValue = ans?.answer_value || "";
-          const codeAnswer = q.field_type === "code" ? parseCodeAnswer(displayValue) : null;
+          const codeFiles = q.field_type === "code" ? parseCodeFiles(displayValue) : [];
           if (q.field_type === "multi_choice" && displayValue) {
             try { const p = JSON.parse(displayValue); if (Array.isArray(p)) displayValue = p.join(", "); } catch {}
           }
@@ -172,29 +176,33 @@ export default function StaffApplicationDetailPage() {
               <p className="text-sm font-medium text-zinc-400 mb-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
                 {q.label}{q.required && <span className="text-red-400/50 ml-1">*</span>}
               </p>
-              {codeAnswer ? (
-                <details className="group rounded-lg border border-white/10 bg-black/30" open>
-                  <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2 text-sm text-zinc-200">
-                    <FileCode className="w-4 h-4 text-[#00E5FF] shrink-0" />
-                    <span className="min-w-0 flex-1 truncate">{codeAnswer.filename}</span>
-                    <span className="text-xs text-zinc-500">{codeAnswer.language} · {formatBytes(codeAnswer.size)}</span>
-                  </summary>
-                  <div className="border-t border-white/5">
-                    <pre className="max-h-[520px] overflow-auto p-4 text-xs leading-relaxed text-zinc-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                      <code>{codeAnswer.content}</code>
-                    </pre>
-                    <div className="flex justify-end border-t border-white/5 px-3 py-2">
-                      <button
-                        type="button"
-                        onClick={() => downloadCodeFile(codeAnswer)}
-                        className="inline-flex items-center gap-2 rounded-lg bg-white/5 px-3 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-white/10"
-                        data-testid={`download-code-${q.id}`}
-                      >
-                        <Download className="w-3.5 h-3.5" /> Pobierz plik
-                      </button>
-                    </div>
-                  </div>
-                </details>
+              {codeFiles.length > 0 ? (
+                <div className="space-y-3">
+                  {codeFiles.map((codeFile, index) => (
+                    <details key={`${codeFile.filename}-${index}`} className="group rounded-lg border border-white/10 bg-black/30" open={index === 0}>
+                      <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2 text-sm text-zinc-200">
+                        <FileCode className="w-4 h-4 text-[#00E5FF] shrink-0" />
+                        <span className="min-w-0 flex-1 truncate">{codeFile.filename}</span>
+                        <span className="text-xs text-zinc-500">{codeFile.language} · {formatBytes(codeFile.size)}</span>
+                      </summary>
+                      <div className="border-t border-white/5">
+                        <pre className="max-h-[520px] overflow-auto p-4 text-xs leading-relaxed text-zinc-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                          <code>{codeFile.content}</code>
+                        </pre>
+                        <div className="flex justify-end border-t border-white/5 px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={() => downloadCodeFile(codeFile)}
+                            className="inline-flex items-center gap-2 rounded-lg bg-white/5 px-3 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-white/10"
+                            data-testid={`download-code-${q.id}-${index}`}
+                          >
+                            <Download className="w-3.5 h-3.5" /> Pobierz plik
+                          </button>
+                        </div>
+                      </div>
+                    </details>
+                  ))}
+                </div>
               ) : (
                 <p className="text-sm text-zinc-200 whitespace-pre-wrap" style={{ fontFamily: "'Outfit', sans-serif" }}>
                   {displayValue || <span className="text-zinc-600 italic">Brak odpowiedzi</span>}

@@ -8,12 +8,14 @@ const logger = require('../utils/logger');
 
 const router = express.Router();
 const CODE_ANSWER_MAX_BYTES = 512 * 1024;
+const CODE_ANSWER_MAX_FILES = 10;
+const CODE_ANSWER_MAX_TOTAL_BYTES = 5 * 1024 * 1024;
 
 function byteLength(value) {
   return Buffer.byteLength(value || '', 'utf8');
 }
 
-function normalizeCodeAnswer(value) {
+function normalizeCodeFile(value) {
   if (!value) {
     return null;
   }
@@ -36,6 +38,18 @@ function normalizeCodeAnswer(value) {
     size: byteLength(content),
     content,
   };
+}
+
+function normalizeCodeAnswer(value) {
+  if (!value) {
+    return [];
+  }
+
+  const rawFiles = Array.isArray(value) ? value : [value];
+  return rawFiles
+    .map(normalizeCodeFile)
+    .filter(Boolean)
+    .slice(0, CODE_ANSWER_MAX_FILES);
 }
 
 /**
@@ -101,11 +115,12 @@ async function submitApplication(req, res) {
     for (const q of questions) {
       const qid = q.id;
       const value = answers?.[qid];
-      const codeAnswer = q.field_type === 'code' ? normalizeCodeAnswer(value) : null;
+      const codeFiles = q.field_type === 'code' ? normalizeCodeAnswer(value) : [];
+      const codeTotalSize = codeFiles.reduce((sum, file) => sum + file.size, 0);
 
       if (q.required) {
         if (q.field_type === 'code') {
-          if (!codeAnswer) {
+          if (codeFiles.length === 0) {
             errors.push(`Pole "${q.label}" jest wymagane`);
           }
         } else if (Array.isArray(value)) {
@@ -117,8 +132,18 @@ async function submitApplication(req, res) {
         }
       }
 
-      if (q.field_type === 'code' && codeAnswer && codeAnswer.size > CODE_ANSWER_MAX_BYTES) {
-        errors.push(`Plik w polu "${q.label}" jest za duzy (maksymalnie 512 KB)`);
+      if (q.field_type === 'code') {
+        if (Array.isArray(value) && value.length > CODE_ANSWER_MAX_FILES) {
+          errors.push(`W polu "${q.label}" mozna zalaczyc maksymalnie ${CODE_ANSWER_MAX_FILES} plikow`);
+        }
+
+        if (codeFiles.some(file => file.size > CODE_ANSWER_MAX_BYTES)) {
+          errors.push(`Plik w polu "${q.label}" jest za duzy (maksymalnie 512 KB na plik)`);
+        }
+
+        if (codeTotalSize > CODE_ANSWER_MAX_TOTAL_BYTES) {
+          errors.push(`Pliki w polu "${q.label}" sa za duze lacznie (maksymalnie 5 MB)`);
+        }
       }
     }
 
@@ -156,8 +181,8 @@ async function submitApplication(req, res) {
       const value = answers?.[qid] || '';
       let answerStr;
       if (q.field_type === 'code') {
-        const codeAnswer = normalizeCodeAnswer(value);
-        answerStr = codeAnswer ? JSON.stringify(codeAnswer) : '';
+        const codeFiles = normalizeCodeAnswer(value);
+        answerStr = codeFiles.length > 0 ? JSON.stringify(codeFiles) : '';
       } else {
         answerStr = Array.isArray(value) ? JSON.stringify(value) : String(value);
       }

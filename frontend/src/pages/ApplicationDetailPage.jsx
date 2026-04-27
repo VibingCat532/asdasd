@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { Badge } from "../components/ui/badge";
 import { Separator } from "../components/ui/separator";
-import { Loader2, ArrowLeft, Clock, FileText, FileCode } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, FileText, FileCode, Download } from "lucide-react";
 import axios from "axios";
 import { API } from "../lib/api";
 
@@ -39,6 +39,18 @@ function parseCodeFiles(answerValue) {
 function formatBytes(bytes = 0) {
   if (bytes < 1024) return `${bytes} B`;
   return `${Math.round(bytes / 102.4) / 10} KB`;
+}
+
+function downloadCodeFile(code) {
+  const blob = new Blob([code.content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = code.filename || "code.txt";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
 }
 
 export default function ApplicationDetailPage() {
@@ -159,9 +171,21 @@ export default function ApplicationDetailPage() {
                         <span className="min-w-0 flex-1 truncate">{codeFile.filename}</span>
                         <span className="text-xs text-zinc-500">{codeFile.language} · {formatBytes(codeFile.size)}</span>
                       </summary>
-                      <pre className="max-h-[420px] overflow-auto border-t border-white/5 p-4 text-xs leading-relaxed text-zinc-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                        <code>{codeFile.content}</code>
-                      </pre>
+                      <div className="border-t border-white/5">
+                        <pre className="max-h-[420px] overflow-auto p-4 text-xs leading-relaxed text-zinc-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                          <code>{codeFile.content}</code>
+                        </pre>
+                        <div className="flex justify-end border-t border-white/5 px-3 py-2">
+                          <button
+                            type="button"
+                            onClick={() => downloadCodeFile(codeFile)}
+                            className="inline-flex items-center gap-2 rounded-lg bg-white/5 px-3 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-white/10"
+                            data-testid={`download-own-code-${q.id}-${index}`}
+                          >
+                            <Download className="w-3.5 h-3.5" /> Pobierz plik
+                          </button>
+                        </div>
+                      </div>
                     </details>
                   ))}
                 </div>

@@ -29,6 +29,7 @@ const FIELD_TYPES = [
   { value: "long_text", label: "Długa odpowiedź" },
   { value: "single_choice", label: "Jednokrotny wybór" },
   { value: "multi_choice", label: "Wielokrotny wybór" },
+  { value: "code", label: "CODE" },
 ];
 
 
@@ -354,6 +355,8 @@ export default function StaffRecruitmentForm() {
                       updateQuestion(idx, "field_type", v);
                       if (v === "single_choice" || v === "multi_choice") {
                         if (!q.options || q.options.length === 0) updateQuestion(idx, "options", [""]);
+                      } else {
+                        updateQuestion(idx, "options", null);
                       }
                     }}>
                       <SelectTrigger className="w-[180px] bg-black/40 border-white/10 text-zinc-300 text-xs" data-testid={`q-type-${idx}`}><SelectValue /></SelectTrigger>

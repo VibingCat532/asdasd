@@ -3,7 +3,7 @@ import { useParams, Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { Badge } from "../components/ui/badge";
 import { Separator } from "../components/ui/separator";
-import { Loader2, ArrowLeft, Clock, FileText } from "lucide-react";
+import { Loader2, ArrowLeft, Clock, FileText, FileCode } from "lucide-react";
 import axios from "axios";
 import { API } from "../lib/api";
 
@@ -13,6 +13,29 @@ const STATUS_CONFIG = {
   zaakceptowane: { label: "Zaakceptowane", classes: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" },
   odrzucone: { label: "Odrzucone", classes: "bg-red-500/15 text-red-400 border border-red-500/30" },
 };
+
+function parseCodeAnswer(answerValue) {
+  if (!answerValue) return null;
+  try {
+    const parsed = JSON.parse(answerValue);
+    if (parsed && typeof parsed === "object" && typeof parsed.content === "string") {
+      return {
+        filename: parsed.filename || "code.txt",
+        language: parsed.language || "Code",
+        size: parsed.size || parsed.content.length,
+        content: parsed.content,
+      };
+    }
+  } catch {
+    // keep as plain answer
+  }
+  return null;
+}
+
+function formatBytes(bytes = 0) {
+  if (bytes < 1024) return `${bytes} B`;
+  return `${Math.round(bytes / 102.4) / 10} KB`;
+}
 
 export default function ApplicationDetailPage() {
   const { id } = useParams();
@@ -107,6 +130,7 @@ export default function ApplicationDetailPage() {
         {(application.questions_snapshot || []).map((q) => {
           const ans = answerMap[q.id];
           let displayValue = ans?.answer_value || "";
+          const codeAnswer = q.field_type === "code" ? parseCodeAnswer(displayValue) : null;
           if (q.field_type === "multi_choice" && displayValue) {
             try {
               const parsed = JSON.parse(displayValue);
@@ -122,9 +146,22 @@ export default function ApplicationDetailPage() {
                 {q.label}
                 {q.required && <span className="text-red-400/50 ml-1">*</span>}
               </p>
-              <p className="text-sm text-zinc-200 whitespace-pre-wrap" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                {displayValue || <span className="text-zinc-600 italic">Brak odpowiedzi</span>}
-              </p>
+              {codeAnswer ? (
+                <details className="rounded-lg border border-white/10 bg-black/30">
+                  <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2 text-sm text-zinc-200">
+                    <FileCode className="w-4 h-4 text-[#00E5FF] shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">{codeAnswer.filename}</span>
+                    <span className="text-xs text-zinc-500">{codeAnswer.language} · {formatBytes(codeAnswer.size)}</span>
+                  </summary>
+                  <pre className="max-h-[420px] overflow-auto border-t border-white/5 p-4 text-xs leading-relaxed text-zinc-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                    <code>{codeAnswer.content}</code>
+                  </pre>
+                </details>
+              ) : (
+                <p className="text-sm text-zinc-200 whitespace-pre-wrap" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                  {displayValue || <span className="text-zinc-600 italic">Brak odpowiedzi</span>}
+                </p>
+              )}
             </div>
           );
         })}

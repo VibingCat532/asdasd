@@ -7,6 +7,36 @@ const { requireAuth } = require('../utils/auth');
 const logger = require('../utils/logger');
 
 const router = express.Router();
+const CODE_ANSWER_MAX_BYTES = 512 * 1024;
+
+function byteLength(value) {
+  return Buffer.byteLength(value || '', 'utf8');
+}
+
+function normalizeCodeAnswer(value) {
+  if (!value) {
+    return null;
+  }
+
+  if (typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+
+  const content = typeof value.content === 'string' ? value.content : '';
+  if (!content.trim()) {
+    return null;
+  }
+
+  const filename = String(value.filename || value.file_name || 'code.txt').trim().slice(0, 255) || 'code.txt';
+  const language = String(value.language || '').trim().slice(0, 40);
+
+  return {
+    filename,
+    language,
+    size: byteLength(content),
+    content,
+  };
+}
 
 /**
  * POST /api/applications/:recruitmentId
@@ -71,15 +101,24 @@ async function submitApplication(req, res) {
     for (const q of questions) {
       const qid = q.id;
       const value = answers?.[qid];
+      const codeAnswer = q.field_type === 'code' ? normalizeCodeAnswer(value) : null;
 
       if (q.required) {
-        if (Array.isArray(value)) {
+        if (q.field_type === 'code') {
+          if (!codeAnswer) {
+            errors.push(`Pole "${q.label}" jest wymagane`);
+          }
+        } else if (Array.isArray(value)) {
           if (value.length === 0) {
             errors.push(`Pole "${q.label}" jest wymagane`);
           }
         } else if (!value || String(value).trim() === '') {
           errors.push(`Pole "${q.label}" jest wymagane`);
         }
+      }
+
+      if (q.field_type === 'code' && codeAnswer && codeAnswer.size > CODE_ANSWER_MAX_BYTES) {
+        errors.push(`Plik w polu "${q.label}" jest za duzy (maksymalnie 512 KB)`);
       }
     }
 
@@ -115,7 +154,13 @@ async function submitApplication(req, res) {
     for (const q of questions) {
       const qid = q.id;
       const value = answers?.[qid] || '';
-      const answerStr = Array.isArray(value) ? JSON.stringify(value) : String(value);
+      let answerStr;
+      if (q.field_type === 'code') {
+        const codeAnswer = normalizeCodeAnswer(value);
+        answerStr = codeAnswer ? JSON.stringify(codeAnswer) : '';
+      } else {
+        answerStr = Array.isArray(value) ? JSON.stringify(value) : String(value);
+      }
 
       await query(
         `INSERT INTO application_answers (application_id, question_id, question_label, question_type, answer_value)

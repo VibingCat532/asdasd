@@ -4,7 +4,7 @@ import { useAuth } from "../hooks/useAuth";
 import { Badge } from "../components/ui/badge";
 import { Separator } from "../components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
-import { Loader2, ArrowLeft, CheckCircle, XCircle, Clock, AlertTriangle, User } from "lucide-react";
+import { Loader2, ArrowLeft, CheckCircle, XCircle, Clock, AlertTriangle, FileCode, Download } from "lucide-react";
 import axios from "axios";
 import { API } from "../lib/api";
 
@@ -14,6 +14,41 @@ const STATUS_CFG = {
   zaakceptowane: { label: "Zaakceptowane", cls: "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30" },
   odrzucone: { label: "Odrzucone", cls: "bg-red-500/15 text-red-400 border border-red-500/30" },
 };
+
+function parseCodeAnswer(answerValue) {
+  if (!answerValue) return null;
+  try {
+    const parsed = JSON.parse(answerValue);
+    if (parsed && typeof parsed === "object" && typeof parsed.content === "string") {
+      return {
+        filename: parsed.filename || "code.txt",
+        language: parsed.language || "Code",
+        size: parsed.size || parsed.content.length,
+        content: parsed.content,
+      };
+    }
+  } catch {
+    // keep as plain answer
+  }
+  return null;
+}
+
+function formatBytes(bytes = 0) {
+  if (bytes < 1024) return `${bytes} B`;
+  return `${Math.round(bytes / 102.4) / 10} KB`;
+}
+
+function downloadCodeFile(code) {
+  const blob = new Blob([code.content], { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = code.filename || "code.txt";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
 
 export default function StaffApplicationDetailPage() {
   const { recId, appId } = useParams();
@@ -128,6 +163,7 @@ export default function StaffApplicationDetailPage() {
         {(app.questions_snapshot || []).map(q => {
           const ans = answerMap[q.id];
           let displayValue = ans?.answer_value || "";
+          const codeAnswer = q.field_type === "code" ? parseCodeAnswer(displayValue) : null;
           if (q.field_type === "multi_choice" && displayValue) {
             try { const p = JSON.parse(displayValue); if (Array.isArray(p)) displayValue = p.join(", "); } catch {}
           }
@@ -136,9 +172,34 @@ export default function StaffApplicationDetailPage() {
               <p className="text-sm font-medium text-zinc-400 mb-2" style={{ fontFamily: "'Outfit', sans-serif" }}>
                 {q.label}{q.required && <span className="text-red-400/50 ml-1">*</span>}
               </p>
-              <p className="text-sm text-zinc-200 whitespace-pre-wrap" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                {displayValue || <span className="text-zinc-600 italic">Brak odpowiedzi</span>}
-              </p>
+              {codeAnswer ? (
+                <details className="group rounded-lg border border-white/10 bg-black/30" open>
+                  <summary className="flex cursor-pointer list-none items-center gap-3 px-3 py-2 text-sm text-zinc-200">
+                    <FileCode className="w-4 h-4 text-[#00E5FF] shrink-0" />
+                    <span className="min-w-0 flex-1 truncate">{codeAnswer.filename}</span>
+                    <span className="text-xs text-zinc-500">{codeAnswer.language} · {formatBytes(codeAnswer.size)}</span>
+                  </summary>
+                  <div className="border-t border-white/5">
+                    <pre className="max-h-[520px] overflow-auto p-4 text-xs leading-relaxed text-zinc-200" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                      <code>{codeAnswer.content}</code>
+                    </pre>
+                    <div className="flex justify-end border-t border-white/5 px-3 py-2">
+                      <button
+                        type="button"
+                        onClick={() => downloadCodeFile(codeAnswer)}
+                        className="inline-flex items-center gap-2 rounded-lg bg-white/5 px-3 py-1.5 text-xs font-medium text-zinc-300 transition-colors hover:bg-white/10"
+                        data-testid={`download-code-${q.id}`}
+                      >
+                        <Download className="w-3.5 h-3.5" /> Pobierz plik
+                      </button>
+                    </div>
+                  </div>
+                </details>
+              ) : (
+                <p className="text-sm text-zinc-200 whitespace-pre-wrap" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                  {displayValue || <span className="text-zinc-600 italic">Brak odpowiedzi</span>}
+                </p>
+              )}
             </div>
           );
         })}

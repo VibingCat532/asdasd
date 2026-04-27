@@ -7,11 +7,47 @@ import { Badge } from "../components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import { Checkbox } from "../components/ui/checkbox";
 import { Separator } from "../components/ui/separator";
-import { ArrowLeft, Loader2, Send, AlertTriangle, CheckCircle, Lock, LogIn } from "lucide-react";
+import { ArrowLeft, Loader2, Send, AlertTriangle, CheckCircle, Lock, LogIn, FileCode, Upload, X } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import axios from "axios";
 import { API } from "../lib/api";
 
+const CODE_FILE_MAX_BYTES = 512 * 1024;
+const CODE_FILE_ACCEPT = ".lua,.js,.jsx,.ts,.tsx,.py,.java,.cs,.cpp,.c,.h,.hpp,.php,.rb,.go,.rs,.json,.html,.css,.scss,.sql,.txt";
+
+function inferCodeLanguage(filename = "") {
+  const ext = filename.split(".").pop()?.toLowerCase();
+  const map = {
+    lua: "Lua",
+    js: "JavaScript",
+    jsx: "React JSX",
+    ts: "TypeScript",
+    tsx: "React TSX",
+    py: "Python",
+    java: "Java",
+    cs: "C#",
+    cpp: "C++",
+    c: "C",
+    h: "C/C++ Header",
+    hpp: "C++ Header",
+    php: "PHP",
+    rb: "Ruby",
+    go: "Go",
+    rs: "Rust",
+    json: "JSON",
+    html: "HTML",
+    css: "CSS",
+    scss: "SCSS",
+    sql: "SQL",
+    txt: "Text",
+  };
+  return map[ext] || (ext ? ext.toUpperCase() : "Code");
+}
+
+function formatBytes(bytes = 0) {
+  if (bytes < 1024) return `${bytes} B`;
+  return `${Math.round(bytes / 102.4) / 10} KB`;
+}
 
 export default function RecruitmentDetailPage() {
   const { id } = useParams();
@@ -63,6 +99,8 @@ export default function RecruitmentDetailPage() {
         const val = answers[q.id];
         if (q.field_type === "multi_choice") {
           if (!val || val.length === 0) errs.push(`Pole "${q.label}" jest wymagane`);
+        } else if (q.field_type === "code") {
+          if (!val?.content?.trim()) errs.push(`Pole "${q.label}" jest wymagane`);
         } else {
           if (!val || !String(val).trim()) errs.push(`Pole "${q.label}" jest wymagane`);
         }
@@ -302,6 +340,35 @@ export default function RecruitmentDetailPage() {
 function QuestionField({ question, value, onChange, onToggle }) {
   const q = question;
   const id = `q-${q.id}`;
+  const [fileError, setFileError] = useState(null);
+
+  const handleCodeFile = async (event) => {
+    const file = event.target.files?.[0];
+    setFileError(null);
+
+    if (!file) {
+      return;
+    }
+
+    if (file.size > CODE_FILE_MAX_BYTES) {
+      setFileError("Plik jest za duży. Maksymalny rozmiar to 512 KB.");
+      event.target.value = "";
+      return;
+    }
+
+    try {
+      const content = await file.text();
+      onChange({
+        filename: file.name,
+        language: inferCodeLanguage(file.name),
+        size: file.size,
+        content,
+      });
+    } catch {
+      setFileError("Nie udało się odczytać pliku.");
+      event.target.value = "";
+    }
+  };
 
   return (
     <div className="rounded-xl bg-[#0F0F13] border border-white/5 p-5" data-testid={`question-field-${q.id}`}>
@@ -377,6 +444,47 @@ function QuestionField({ question, value, onChange, onToggle }) {
               </Label>
             </div>
           ))}
+        </div>
+      )}
+
+      {q.field_type === "code" && (
+        <div className="space-y-3">
+          <label
+            htmlFor={id}
+            className="flex min-h-[92px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-white/10 bg-black/30 px-4 py-5 text-center transition-colors hover:border-[#00E5FF]/40"
+          >
+            <Upload className="w-5 h-5 text-[#00E5FF]" />
+            <span className="text-sm font-medium text-zinc-300">
+              {value?.filename ? "Zmień plik z kodem" : "Wybierz plik z kodem"}
+            </span>
+            <span className="text-xs text-zinc-600">Lua, JS, TS, Python, C++, HTML, CSS, JSON i inne, max 512 KB</span>
+          </label>
+          <input
+            id={id}
+            type="file"
+            accept={CODE_FILE_ACCEPT}
+            onChange={handleCodeFile}
+            className="hidden"
+            data-testid={`code-file-${q.id}`}
+          />
+          {fileError && <p className="text-xs text-red-400">{fileError}</p>}
+          {value?.filename && (
+            <div className="flex items-center gap-3 rounded-lg border border-white/5 bg-black/20 px-3 py-2">
+              <FileCode className="w-4 h-4 text-[#00E5FF] shrink-0" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm text-zinc-200">{value.filename}</p>
+                <p className="text-xs text-zinc-600">{value.language || inferCodeLanguage(value.filename)} · {formatBytes(value.size || value.content?.length || 0)}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => onChange("")}
+                className="p-1.5 text-zinc-500 hover:text-red-400"
+                title="Usuń plik"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+          )}
         </div>
       )}
     </div>

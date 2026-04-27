@@ -188,7 +188,7 @@ export default function RecruitmentDetailPage() {
             }
             data-testid="recruitment-status-badge"
           >
-            {isClosed ? "zamknięta" : "otwarta"}
+            {isClosed ? "nieaktywna" : "aktywna"}
           </Badge>
         </div>
         <p className="text-sm text-zinc-400 leading-relaxed ml-[52px]" style={{ fontFamily: "'Outfit', sans-serif" }} data-testid="recruitment-description">
@@ -202,7 +202,7 @@ export default function RecruitmentDetailPage() {
       {isClosed && (
         <div className="rounded-xl bg-zinc-900/50 border border-zinc-800/50 p-6 text-center" data-testid="recruitment-closed-notice">
           <Lock className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
-          <p className="text-zinc-400 font-medium" style={{ fontFamily: "'Outfit', sans-serif" }}>Ta rekrutacja jest zamknięta</p>
+          <p className="text-zinc-400 font-medium" style={{ fontFamily: "'Outfit', sans-serif" }}>Ta rekrutacja jest nieaktywna</p>
           <p className="text-zinc-600 text-sm mt-1">Nowe aplikacje nie są przyjmowane.</p>
         </div>
       )}

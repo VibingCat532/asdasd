@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { Badge } from "../components/ui/badge";
+import { Switch } from "../components/ui/switch";
 import { Loader2, Plus, ShieldCheck, Users, FileText, Settings, AlertTriangle, Lock, Trash2 } from "lucide-react";
 import axios from "axios";
 import { API } from "../lib/api";
@@ -18,6 +19,7 @@ export default function StaffDashboard() {
   const [recruitments, setRecruitments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [deletingId, setDeletingId] = useState(null);
+  const [updatingStatusId, setUpdatingStatusId] = useState(null);
 
   useEffect(() => {
     if (!user || !staffInfo?.is_staff) {
@@ -85,6 +87,25 @@ export default function StaffDashboard() {
     }
   };
 
+  const handleStatusToggle = async (rec, checked) => {
+    const nextStatus = checked ? "active" : "inactive";
+    setUpdatingStatusId(rec.id);
+    try {
+      const res = await axios.patch(
+        API + "/staff/recruitments/" + rec.id + "/status",
+        { status: nextStatus },
+        { withCredentials: true }
+      );
+      setRecruitments(prev => prev.map(item => (
+        item.id === rec.id ? { ...item, status: res.data.status || nextStatus } : item
+      )));
+    } catch (err) {
+      window.alert(err.response?.data?.error || "Nie udalo sie zmienic statusu rekrutacji");
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8" data-testid="staff-dashboard">
       <div className="hs-animate-fade-up mb-8">
@@ -149,7 +170,7 @@ export default function StaffDashboard() {
                         : "bg-zinc-800/50 text-zinc-500 border border-zinc-700/30 text-xs font-mono uppercase"
                     }
                   >
-                    {rec.status === "active" ? "aktywna" : "zamknieta"}
+                    {rec.status === "active" ? "aktywna" : "nieaktywna"}
                   </Badge>
                   <Badge
                     className={
@@ -173,6 +194,20 @@ export default function StaffDashboard() {
                   </span>
                 )}
               </div>
+
+              {rec.can_update_status && (
+                <div className="flex items-center justify-between gap-3 mb-4 rounded-lg border border-white/5 bg-black/20 px-3 py-2">
+                  <span className="text-xs font-medium text-zinc-400">Aktywna rekrutacja</span>
+                  <Switch
+                    checked={rec.status === "active"}
+                    disabled={updatingStatusId === rec.id}
+                    onCheckedChange={(checked) => handleStatusToggle(rec, checked)}
+                    className="data-[state=checked]:bg-[#00E5FF] data-[state=unchecked]:bg-zinc-800"
+                    data-testid={`toggle-rec-status-${rec.slug}`}
+                    title={rec.status === "active" ? "Ustaw jako nieaktywna" : "Ustaw jako aktywna"}
+                  />
+                </div>
+              )}
 
               <div className="flex gap-2">
                 <Link

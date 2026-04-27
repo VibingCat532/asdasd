@@ -50,7 +50,7 @@ export default function HomePage() {
 
   const recruitmentList = Array.isArray(recruitments) ? recruitments : [];
   const active = recruitmentList.filter((r) => r.status === "active");
-  const closed = recruitmentList.filter((r) => r.status === "closed");
+  const inactive = recruitmentList.filter((r) => r.status !== "active");
 
   return (
     <div className="min-h-[calc(100vh-4rem)]">
@@ -126,8 +126,8 @@ export default function HomePage() {
               </section>
             )}
 
-            {/* Closed */}
-            {closed.length > 0 && (
+            {/* Inactive */}
+            {inactive.length > 0 && (
               <section className="hs-animate-fade-up" data-testid="closed-recruitments-section">
                 <div className="flex items-center gap-3 mb-6">
                   <Clock className="w-5 h-5 text-zinc-500" />
@@ -135,11 +135,11 @@ export default function HomePage() {
                     className="text-xl sm:text-2xl font-bold tracking-tight uppercase"
                     style={{ fontFamily: "'Unbounded', sans-serif", color: "#71717A" }}
                   >
-                    Zakończone
+                    Nieaktywne
                   </h2>
                 </div>
                 <div className="grid gap-4 sm:grid-cols-2">
-                  {closed.map((rec, i) => (
+                  {inactive.map((rec, i) => (
                     <RecruitmentCard key={rec.id} recruitment={rec} index={i} closed />
                   ))}
                 </div>
@@ -200,7 +200,7 @@ function RecruitmentCard({ recruitment, index, closed }) {
                 : "bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30 text-xs font-mono uppercase shrink-0"
             }
           >
-            {closed ? "zamknięta" : "otwarta"}
+            {closed ? "nieaktywna" : "aktywna"}
           </Badge>
         </div>
 

@@ -62,7 +62,7 @@ export default function StaffRecruitmentForm() {
     try {
       const res = await axios.get(`${API}/staff/recruitments/${id}`, { withCredentials: true });
       const d = res.data;
-      setForm({ name: d.name, description: d.description, status: d.status, theme_color: d.theme_color, scope: d.scope || "", accepted_discord_role_id: d.accepted_discord_role_id || "" });
+      setForm({ name: d.name, description: d.description, status: d.status === "closed" ? "inactive" : d.status, theme_color: d.theme_color, scope: d.scope || "", accepted_discord_role_id: d.accepted_discord_role_id || "" });
       setQuestions(d.questions.map(q => ({ ...q, _key: q.id || crypto.randomUUID() })));
       setPermLevel(d.permission_level);
       setPermissions({
@@ -301,7 +301,7 @@ export default function StaffRecruitmentForm() {
                   <SelectTrigger className="bg-black/40 border-white/10 text-zinc-100" data-testid="select-status"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Aktywna</SelectItem>
-                    <SelectItem value="closed">Zamknięta</SelectItem>
+                    <SelectItem value="inactive">Nieaktywna</SelectItem>
                   </SelectContent>
                 </Select>
               </div>

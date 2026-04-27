@@ -11,6 +11,22 @@ const logger = require('../utils/logger');
 
 const router = express.Router();
 
+const RECRUITMENT_STATUSES = ['active', 'inactive'];
+
+function normalizeRecruitmentStatus(status) {
+  if (status === undefined) {
+    return undefined;
+  }
+  if (status === 'closed') {
+    return 'inactive';
+  }
+  return status;
+}
+
+function isValidRecruitmentStatus(status) {
+  return RECRUITMENT_STATUSES.includes(status);
+}
+
 // ────────── Helpers ──────────
 
 function slugify(text) {
@@ -249,6 +265,7 @@ router.get('/recruitments', requireAuth, async (req, res) => {
         theme_color: r.theme_color,
         scope: r.scope,
         permission_level: permissionLevel,
+        can_update_status: permissionLevel === 'full',
         can_edit_questions: permissionLevel === 'full' || !!r.can_edit_questions,
         can_review_applications: permissionLevel === 'full' || !!r.can_review_applications || permissionLevel === 'reviewer',
         app_count: parseInt(r.app_count, 10),
@@ -300,6 +317,7 @@ router.post('/recruitments', requireAuth, async (req, res) => {
     }
 
     const { name, description, status = 'active', theme_color = '#00E5FF', scope = null, accepted_discord_role_id = null, questions = [] } = req.body;
+    const normalizedStatus = normalizeRecruitmentStatus(status);
 
     if (!name || !name.trim()) {
       return res.status(422).json({ error: 'Nazwa jest wymagana' });
@@ -309,6 +327,10 @@ router.post('/recruitments', requireAuth, async (req, res) => {
       return res.status(422).json({ error: 'Opis jest wymagany' });
     }
 
+    if (!isValidRecruitmentStatus(normalizedStatus)) {
+      return res.status(422).json({ error: 'Status musi byc active albo inactive' });
+    }
+
     const slug = slugify(name);
 
     // Create recruitment
@@ -316,7 +338,7 @@ router.post('/recruitments', requireAuth, async (req, res) => {
       `INSERT INTO recruitments (name, slug, description, status, theme_color, creator_id, scope, accepted_discord_role_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
        RETURNING id, created_at`,
-      [name, slug, description, status, theme_color, staffUser.userId, scope, accepted_discord_role_id]
+      [name, slug, description, normalizedStatus, theme_color, staffUser.userId, scope, accepted_discord_role_id]
     );
 
     const recruitmentId = recResult.rows[0].id;
@@ -343,7 +365,7 @@ router.post('/recruitments', requireAuth, async (req, res) => {
       name,
       slug,
       description,
-      status,
+      status: normalizedStatus,
       theme_color,
       scope,
       accepted_discord_role_id,
@@ -658,9 +680,14 @@ async function updateRecruitmentSettings(req, res) {
 
     const { recruitmentId } = req.params;
     const { name, description, status, theme_color, scope, accepted_discord_role_id } = req.body;
+    const normalizedStatus = normalizeRecruitmentStatus(status);
     const permission = await getRecruitmentPermission(staffUser, recruitmentId);
     if (!permission.canEditRecruitment) {
       return res.status(403).json({ error: 'Brak uprawnien do edycji ustawien rekrutacji' });
+    }
+
+    if (normalizedStatus !== undefined && !isValidRecruitmentStatus(normalizedStatus)) {
+      return res.status(422).json({ error: 'Status musi byc active albo inactive' });
     }
 
     const updates = [];
@@ -675,9 +702,9 @@ async function updateRecruitmentSettings(req, res) {
       updates.push(`description = $${paramCount++}`);
       values.push(description);
     }
-    if (status !== undefined) {
+    if (normalizedStatus !== undefined) {
       updates.push(`status = $${paramCount++}`);
-      values.push(status);
+      values.push(normalizedStatus);
     }
     if (theme_color !== undefined) {
       updates.push(`theme_color = $${paramCount++}`);
@@ -724,6 +751,51 @@ async function updateRecruitmentSettings(req, res) {
 
 router.patch('/recruitments/:recruitmentId', requireAuth, updateRecruitmentSettings);
 router.put('/recruitments/:recruitmentId', requireAuth, updateRecruitmentSettings);
+
+router.patch('/recruitments/:recruitmentId/status', requireAuth, async (req, res) => {
+  try {
+    const staffUser = await getStaffUser(req);
+    if (!staffUser) {
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const { recruitmentId } = req.params;
+    const status = normalizeRecruitmentStatus(req.body?.status);
+    if (!isValidRecruitmentStatus(status)) {
+      return res.status(422).json({ error: 'Status musi byc active albo inactive' });
+    }
+
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+    if (permission.notFound) {
+      return res.status(404).json({ error: 'Rekrutacja nie znaleziona' });
+    }
+    if (!permission.canEditRecruitment) {
+      return res.status(403).json({ error: 'Brak uprawnien do zmiany statusu rekrutacji' });
+    }
+
+    const result = await query(
+      `UPDATE recruitments
+       SET status = $1, updated_at = NOW()
+       WHERE id = $2
+       RETURNING id, status, updated_at`,
+      [status, recruitmentId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Rekrutacja nie znaleziona' });
+    }
+
+    const rec = result.rows[0];
+    res.json({
+      id: rec.id,
+      status: rec.status,
+      updated_at: rec.updated_at.toISOString(),
+    });
+  } catch (err) {
+    logger.error('Failed to update recruitment status', err);
+    res.status(500).json({ error: 'Nie udalo sie zmienic statusu rekrutacji' });
+  }
+});
 
 router.patch('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
   try {

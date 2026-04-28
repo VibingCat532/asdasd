@@ -33,6 +33,11 @@ const FIELD_TYPES = [
 ];
 
 
+const CATEGORIES = [
+  { value: "general", label: "Ogólna" },
+  { value: "factions", label: "Frakcje" },
+];
+
 const DEFAULT_ACCESS = { can_edit_questions: false, can_review_applications: true };
 export default function StaffRecruitmentForm() {
   const { id } = useParams();
@@ -40,7 +45,7 @@ export default function StaffRecruitmentForm() {
   const { user, staffInfo, loading: authLoading } = useAuth();
   const isEdit = !!id;
 
-  const [form, setForm] = useState({ name: "", description: "", status: "active", theme_color: "#00E5FF", scope: "", accepted_discord_role_id: "" });
+  const [form, setForm] = useState({ name: "", description: "", status: "active", theme_color: "#00E5FF", category: "general", scope: "", accepted_discord_role_id: "" });
   const [questions, setQuestions] = useState([]);
   const [accessUsers, setAccessUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
@@ -63,7 +68,7 @@ export default function StaffRecruitmentForm() {
     try {
       const res = await axios.get(`${API}/staff/recruitments/${id}`, { withCredentials: true });
       const d = res.data;
-      setForm({ name: d.name, description: d.description, status: d.status === "closed" ? "inactive" : d.status, theme_color: d.theme_color, scope: d.scope || "", accepted_discord_role_id: d.accepted_discord_role_id || "" });
+      setForm({ name: d.name, description: d.description, status: d.status === "closed" ? "inactive" : d.status, theme_color: d.theme_color, category: d.category || "general", scope: d.scope || "", accepted_discord_role_id: d.accepted_discord_role_id || "" });
       setQuestions(d.questions.map(q => ({ ...q, _key: q.id || crypto.randomUUID() })));
       setPermLevel(d.permission_level);
       setPermissions({
@@ -319,12 +324,13 @@ export default function StaffRecruitmentForm() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label className="text-zinc-300 mb-1.5 block text-sm">Zakres (scope)</Label>
-                <Select value={form.scope || "general"} onValueChange={v => updateForm("scope", v === "general" ? "" : v)}>
-                  <SelectTrigger className="bg-black/40 border-white/10 text-zinc-100" data-testid="select-scope"><SelectValue /></SelectTrigger>
+                <Label className="text-zinc-300 mb-1.5 block text-sm">Kategoria</Label>
+                <Select value={form.category || "general"} onValueChange={v => updateForm("category", v)}>
+                  <SelectTrigger className="bg-black/40 border-white/10 text-zinc-100" data-testid="select-category"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="general">Ogólny</SelectItem>
-                    <SelectItem value="administracja">Administracja</SelectItem>
+                    {CATEGORIES.map(category => (
+                      <SelectItem key={category.value} value={category.value}>{category.label}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

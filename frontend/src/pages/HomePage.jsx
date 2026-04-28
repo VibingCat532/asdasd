@@ -2,10 +2,22 @@ import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { Badge } from "../components/ui/badge";
-import { CheckCircle, XCircle, Clock, ArrowRight, Loader2, ShieldCheck } from "lucide-react";
+import { CheckCircle, XCircle, Clock, ArrowRight, Loader2, ShieldCheck, Tags } from "lucide-react";
 import axios from "axios";
 import { API } from "../lib/api";
 
+const CATEGORY_FILTERS = [
+  { value: "all", label: "Wszystkie" },
+  { value: "general", label: "Ogólna" },
+  { value: "factions", label: "Frakcje" },
+];
+
+const CATEGORY_LABELS = {
+  general: "Ogólna",
+  factions: "Frakcje",
+};
+
+const getCategory = (recruitment) => recruitment?.category || "general";
 
 export default function HomePage() {
   const { user } = useAuth();
@@ -14,6 +26,7 @@ export default function HomePage() {
   const [loadError, setLoadError] = useState(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const [toast, setToast] = useState(null);
+  const [selectedCategory, setSelectedCategory] = useState("all");
 
   useEffect(() => {
     const authParam = searchParams.get("auth");
@@ -49,8 +62,11 @@ export default function HomePage() {
   }, []);
 
   const recruitmentList = Array.isArray(recruitments) ? recruitments : [];
-  const active = recruitmentList.filter((r) => r.status === "active");
-  const inactive = recruitmentList.filter((r) => r.status !== "active");
+  const filteredRecruitments = selectedCategory === "all"
+    ? recruitmentList
+    : recruitmentList.filter((r) => getCategory(r) === selectedCategory);
+  const active = filteredRecruitments.filter((r) => r.status === "active");
+  const inactive = filteredRecruitments.filter((r) => r.status !== "active");
 
   return (
     <div className="min-h-[calc(100vh-4rem)]">
@@ -103,6 +119,35 @@ export default function HomePage() {
           </div>
         ) : (
           <>
+            <div className="mb-8 hs-animate-fade-up" data-testid="category-filters">
+              <div className="flex items-center gap-2 mb-3">
+                <Tags className="w-4 h-4 text-[#00E5FF]" />
+                <span className="text-xs font-bold uppercase tracking-[0.18em] text-zinc-500" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                  Kategorie
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {CATEGORY_FILTERS.map((category) => {
+                  const isSelected = selectedCategory === category.value;
+                  return (
+                    <button
+                      key={category.value}
+                      type="button"
+                      onClick={() => setSelectedCategory(category.value)}
+                      className={`px-4 py-2 rounded-lg border text-xs font-mono uppercase transition-colors ${
+                        isSelected
+                          ? "bg-[#00E5FF]/15 text-[#00E5FF] border-[#00E5FF]/30"
+                          : "bg-[#0F0F13] text-zinc-500 border-white/5 hover:text-zinc-300 hover:border-white/15"
+                      }`}
+                      data-testid={`category-filter-${category.value}`}
+                    >
+                      {category.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             {/* Active */}
             {active.length > 0 && (
               <section className="mb-12 hs-animate-fade-up" data-testid="active-recruitments-section">
@@ -157,6 +202,11 @@ export default function HomePage() {
                 <p className="text-lg">Brak dostępnych rekrutacji</p>
               </div>
             )}
+            {recruitmentList.length > 0 && filteredRecruitments.length === 0 && (
+              <div className="text-center py-20 text-zinc-500" data-testid="no-recruitments-in-category">
+                <p className="text-lg">Brak rekrutacji w tej kategorii</p>
+              </div>
+            )}
           </>
         )}
       </div>
@@ -166,6 +216,7 @@ export default function HomePage() {
 
 function RecruitmentCard({ recruitment, index, closed }) {
   const r = recruitment;
+  const categoryLabel = CATEGORY_LABELS[getCategory(r)] || CATEGORY_LABELS.general;
   return (
     <Link
       to={`/recruitment/${r.id}`}
@@ -193,15 +244,20 @@ function RecruitmentCard({ recruitment, index, closed }) {
           >
             {r.name}
           </h3>
-          <Badge
-            className={
-              closed
-                ? "bg-zinc-800/50 text-zinc-500 border border-zinc-700/30 text-xs font-mono uppercase shrink-0"
-                : "bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30 text-xs font-mono uppercase shrink-0"
-            }
-          >
-            {closed ? "nieaktywna" : "aktywna"}
-          </Badge>
+          <div className="flex flex-wrap justify-end gap-1.5 shrink-0">
+            <Badge className="bg-white/5 text-zinc-400 border border-white/10 text-xs font-mono uppercase">
+              {categoryLabel}
+            </Badge>
+            <Badge
+              className={
+                closed
+                  ? "bg-zinc-800/50 text-zinc-500 border border-zinc-700/30 text-xs font-mono uppercase"
+                  : "bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30 text-xs font-mono uppercase"
+              }
+            >
+              {closed ? "nieaktywna" : "aktywna"}
+            </Badge>
+          </div>
         </div>
 
         <p

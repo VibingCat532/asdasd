@@ -37,12 +37,16 @@ CREATE TABLE IF NOT EXISTS recruitments (
     description TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
     theme_color TEXT DEFAULT '#00E5FF',
+    category TEXT NOT NULL DEFAULT 'general',
     creator_id UUID REFERENCES users(id),
     scope TEXT,
     accepted_discord_role_id TEXT,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE recruitments
+ADD COLUMN IF NOT EXISTS category TEXT NOT NULL DEFAULT 'general';
 
 -- Recruitment questions
 CREATE TABLE IF NOT EXISTS recruitment_questions (

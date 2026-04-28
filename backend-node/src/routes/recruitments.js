@@ -18,7 +18,7 @@ router.post('/:recruitmentId/apply', requireAuth, applicationRoutes.submitApplic
 router.get('/', async (req, res) => {
   try {
     const result = await query(
-      `SELECT r.id, r.name, r.slug, r.description, r.status, r.theme_color, r.created_at,
+      `SELECT r.id, r.name, r.slug, r.description, r.status, r.theme_color, r.category, r.created_at,
               COUNT(rq.id) as question_count
        FROM recruitments r
        LEFT JOIN recruitment_questions rq ON rq.recruitment_id = r.id
@@ -33,6 +33,7 @@ router.get('/', async (req, res) => {
       description: r.description,
       status: r.status,
       theme_color: r.theme_color,
+      category: r.category || 'general',
       question_count: parseInt(r.question_count, 10),
       created_at: r.created_at.toISOString(),
     }));
@@ -54,7 +55,7 @@ router.get('/:recruitmentId', async (req, res) => {
   try {
     // Fetch recruitment
     const recResult = await query(
-      `SELECT id, name, slug, description, status, theme_color, created_at
+      `SELECT id, name, slug, description, status, theme_color, category, created_at
        FROM recruitments WHERE id = $1`,
       [recruitmentId]
     );
@@ -115,6 +116,7 @@ router.get('/:recruitmentId', async (req, res) => {
       description: recruitment.description,
       status: recruitment.status,
       theme_color: recruitment.theme_color,
+      category: recruitment.category || 'general',
       questions,
       created_at: recruitment.created_at.toISOString(),
       user_can_apply: userCanApply,

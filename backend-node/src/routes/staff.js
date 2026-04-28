@@ -12,6 +12,7 @@ const logger = require('../utils/logger');
 const router = express.Router();
 
 const RECRUITMENT_STATUSES = ['active', 'inactive'];
+const RECRUITMENT_CATEGORIES = ['general', 'factions'];
 
 function normalizeRecruitmentStatus(status) {
   if (status === undefined) {
@@ -25,6 +26,17 @@ function normalizeRecruitmentStatus(status) {
 
 function isValidRecruitmentStatus(status) {
   return RECRUITMENT_STATUSES.includes(status);
+}
+
+function normalizeRecruitmentCategory(category) {
+  if (category === undefined || category === null || category === '') {
+    return 'general';
+  }
+  return category;
+}
+
+function isValidRecruitmentCategory(category) {
+  return RECRUITMENT_CATEGORIES.includes(category);
 }
 
 // ────────── Helpers ──────────
@@ -220,7 +232,7 @@ router.get('/recruitments', requireAuth, async (req, res) => {
     let result;
     if (capabilities.is_management) {
       result = await query(
-        `SELECT r.id, r.name, r.slug, r.status, r.theme_color, r.scope, r.creator_id, r.created_at,
+        `SELECT r.id, r.name, r.slug, r.status, r.theme_color, r.category, r.scope, r.creator_id, r.created_at,
                 COUNT(DISTINCT a.id) as app_count,
                 COUNT(DISTINCT CASE WHEN a.status = 'nowe' THEN a.id END) as pending_count
          FROM recruitments r
@@ -230,7 +242,7 @@ router.get('/recruitments', requireAuth, async (req, res) => {
       );
     } else {
       result = await query(
-        `SELECT r.id, r.name, r.slug, r.status, r.theme_color, r.scope, r.creator_id, r.created_at,
+        `SELECT r.id, r.name, r.slug, r.status, r.theme_color, r.category, r.scope, r.creator_id, r.created_at,
                 ra.can_edit_questions, ra.can_review_applications,
                 COUNT(DISTINCT a.id) as app_count,
                 COUNT(DISTINCT CASE WHEN a.status = 'nowe' THEN a.id END) as pending_count
@@ -263,6 +275,7 @@ router.get('/recruitments', requireAuth, async (req, res) => {
         slug: r.slug,
         status: r.status,
         theme_color: r.theme_color,
+        category: r.category || 'general',
         scope: r.scope,
         permission_level: permissionLevel,
         can_update_status: permissionLevel === 'full',
@@ -316,8 +329,9 @@ router.post('/recruitments', requireAuth, async (req, res) => {
       }
     }
 
-    const { name, description, status = 'active', theme_color = '#00E5FF', scope = null, accepted_discord_role_id = null, questions = [] } = req.body;
+    const { name, description, status = 'active', theme_color = '#00E5FF', category = 'general', scope = null, accepted_discord_role_id = null, questions = [] } = req.body;
     const normalizedStatus = normalizeRecruitmentStatus(status);
+    const normalizedCategory = normalizeRecruitmentCategory(category);
 
     if (!name || !name.trim()) {
       return res.status(422).json({ error: 'Nazwa jest wymagana' });
@@ -331,14 +345,18 @@ router.post('/recruitments', requireAuth, async (req, res) => {
       return res.status(422).json({ error: 'Status musi byc active albo inactive' });
     }
 
+    if (!isValidRecruitmentCategory(normalizedCategory)) {
+      return res.status(422).json({ error: 'Kategoria musi byc general albo factions' });
+    }
+
     const slug = slugify(name);
 
     // Create recruitment
     const recResult = await query(
-      `INSERT INTO recruitments (name, slug, description, status, theme_color, creator_id, scope, accepted_discord_role_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+      `INSERT INTO recruitments (name, slug, description, status, theme_color, category, creator_id, scope, accepted_discord_role_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
        RETURNING id, created_at`,
-      [name, slug, description, normalizedStatus, theme_color, staffUser.userId, scope, accepted_discord_role_id]
+      [name, slug, description, normalizedStatus, theme_color, normalizedCategory, staffUser.userId, scope, accepted_discord_role_id]
     );
 
     const recruitmentId = recResult.rows[0].id;
@@ -367,6 +385,7 @@ router.post('/recruitments', requireAuth, async (req, res) => {
       description,
       status: normalizedStatus,
       theme_color,
+      category: normalizedCategory,
       scope,
       accepted_discord_role_id,
       created_at: recResult.rows[0].created_at.toISOString(),
@@ -553,7 +572,7 @@ router.get('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
     }
 
     const recResult = await query(
-      `SELECT id, name, slug, description, status, theme_color, scope, accepted_discord_role_id, creator_id, created_at
+      `SELECT id, name, slug, description, status, theme_color, category, scope, accepted_discord_role_id, creator_id, created_at
        FROM recruitments WHERE id = $1`,
       [recruitmentId]
     );
@@ -573,6 +592,7 @@ router.get('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
       description: recruitment.description,
       status: recruitment.status,
       theme_color: recruitment.theme_color,
+      category: recruitment.category || 'general',
       scope: recruitment.scope,
       accepted_discord_role_id: recruitment.accepted_discord_role_id,
       creator_id: recruitment.creator_id,
@@ -622,7 +642,7 @@ router.get('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
 
     // Fetch recruitment
     const recResult = await query(
-      `SELECT id, name, slug, description, status, theme_color, scope, accepted_discord_role_id, creator_id, created_at
+      `SELECT id, name, slug, description, status, theme_color, category, scope, accepted_discord_role_id, creator_id, created_at
        FROM recruitments WHERE id = $1`,
       [recruitmentId]
     );
@@ -648,6 +668,7 @@ router.get('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
       description: recruitment.description,
       status: recruitment.status,
       theme_color: recruitment.theme_color,
+      category: recruitment.category || 'general',
       scope: recruitment.scope,
       accepted_discord_role_id: recruitment.accepted_discord_role_id,
       creator_id: recruitment.creator_id,
@@ -679,8 +700,9 @@ async function updateRecruitmentSettings(req, res) {
     }
 
     const { recruitmentId } = req.params;
-    const { name, description, status, theme_color, scope, accepted_discord_role_id } = req.body;
+    const { name, description, status, theme_color, category, scope, accepted_discord_role_id } = req.body;
     const normalizedStatus = normalizeRecruitmentStatus(status);
+    const normalizedCategory = category !== undefined ? normalizeRecruitmentCategory(category) : undefined;
     const permission = await getRecruitmentPermission(staffUser, recruitmentId);
     if (!permission.canEditRecruitment) {
       return res.status(403).json({ error: 'Brak uprawnien do edycji ustawien rekrutacji' });
@@ -688,6 +710,10 @@ async function updateRecruitmentSettings(req, res) {
 
     if (normalizedStatus !== undefined && !isValidRecruitmentStatus(normalizedStatus)) {
       return res.status(422).json({ error: 'Status musi byc active albo inactive' });
+    }
+
+    if (normalizedCategory !== undefined && !isValidRecruitmentCategory(normalizedCategory)) {
+      return res.status(422).json({ error: 'Kategoria musi byc general albo factions' });
     }
 
     const updates = [];
@@ -709,6 +735,10 @@ async function updateRecruitmentSettings(req, res) {
     if (theme_color !== undefined) {
       updates.push(`theme_color = $${paramCount++}`);
       values.push(theme_color);
+    }
+    if (normalizedCategory !== undefined) {
+      updates.push(`category = $${paramCount++}`);
+      values.push(normalizedCategory);
     }
     if (scope !== undefined) {
       updates.push(`scope = $${paramCount++}`);
@@ -739,6 +769,7 @@ async function updateRecruitmentSettings(req, res) {
       description: rec.description,
       status: rec.status,
       theme_color: rec.theme_color,
+      category: rec.category || 'general',
       scope: rec.scope,
       accepted_discord_role_id: rec.accepted_discord_role_id,
       updated_at: rec.updated_at.toISOString(),
@@ -805,7 +836,8 @@ router.patch('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
     }
 
     const { recruitmentId } = req.params;
-    const { name, description, status, theme_color, scope, accepted_discord_role_id } = req.body;
+    const { name, description, status, theme_color, category, scope, accepted_discord_role_id } = req.body;
+    const normalizedCategory = category !== undefined ? normalizeRecruitmentCategory(category) : undefined;
 
     // Check access
     const hasAccess = await checkRecruitmentAccess(staffUser.userId, recruitmentId);
@@ -832,6 +864,13 @@ router.patch('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
     if (theme_color !== undefined) {
       updates.push(`theme_color = $${paramCount++}`);
       values.push(theme_color);
+    }
+    if (normalizedCategory !== undefined) {
+      if (!isValidRecruitmentCategory(normalizedCategory)) {
+        return res.status(422).json({ error: 'Kategoria musi byc general albo factions' });
+      }
+      updates.push(`category = $${paramCount++}`);
+      values.push(normalizedCategory);
     }
     if (scope !== undefined) {
       updates.push(`scope = $${paramCount++}`);
@@ -863,6 +902,7 @@ router.patch('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
       description: rec.description,
       status: rec.status,
       theme_color: rec.theme_color,
+      category: rec.category || 'general',
       scope: rec.scope,
       accepted_discord_role_id: rec.accepted_discord_role_id,
       updated_at: rec.updated_at.toISOString(),

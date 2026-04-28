@@ -6,6 +6,11 @@ require("dotenv").config();
 // Craco sets NODE_ENV=development for start, NODE_ENV=production for build
 const isDevServer = process.env.NODE_ENV !== "production";
 
+// Production bundles should not expose original source files in browser devtools.
+if (!isDevServer && process.env.GENERATE_SOURCEMAP === undefined) {
+  process.env.GENERATE_SOURCEMAP = "false";
+}
+
 // Environment variable overrides
 const config = {
   enableHealthCheck: process.env.ENABLE_HEALTH_CHECK === "true",
@@ -37,6 +42,9 @@ let webpackConfig = {
       '@': path.resolve(__dirname, 'src'),
     },
     configure: (webpackConfig) => {
+      if (!isDevServer) {
+        webpackConfig.devtool = false;
+      }
 
       // Add ignored patterns to reduce watched directories
         webpackConfig.watchOptions = {

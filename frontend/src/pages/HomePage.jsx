@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
+import ThreeLogoBackground from "../components/ThreeLogoBackground";
 import { Badge } from "../components/ui/badge";
 import { CheckCircle, XCircle, Clock, ArrowRight, Loader2, ShieldCheck, Tags } from "lucide-react";
 import axios from "axios";
@@ -69,24 +70,26 @@ export default function HomePage() {
   const inactive = filteredRecruitments.filter((r) => r.status !== "active");
 
   return (
-    <div className="min-h-[calc(100vh-4rem)]">
-      {/* Toast */}
-      {toast && (
-        <div className="max-w-5xl mx-auto px-4 pt-4">
-          <div
-            data-testid="home-toast"
-            className={`px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2 hs-animate-fade-up ${
-              toast.type === "error"
-                ? "bg-red-500/10 border border-red-500/20 text-red-400"
-                : "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
-            }`}
-          >
-            {toast.type === "error" ? <XCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
-            {toast.text}
-            <button onClick={() => setToast(null)} className="ml-auto opacity-60 hover:opacity-100">&times;</button>
+    <div className="relative min-h-[calc(100vh-4rem)]">
+      <ThreeLogoBackground />
+      <div className="relative z-10">
+        {/* Toast */}
+        {toast && (
+          <div className="max-w-5xl mx-auto px-4 pt-4">
+            <div
+              data-testid="home-toast"
+              className={`px-4 py-3 rounded-xl text-sm font-medium flex items-center gap-2 hs-animate-fade-up ${
+                toast.type === "error"
+                  ? "bg-red-500/10 border border-red-500/20 text-red-400"
+                  : "bg-emerald-500/10 border border-emerald-500/20 text-emerald-400"
+              }`}
+            >
+              {toast.type === "error" ? <XCircle className="w-4 h-4" /> : <CheckCircle className="w-4 h-4" />}
+              {toast.text}
+              <button onClick={() => setToast(null)} className="ml-auto opacity-60 hover:opacity-100">&times;</button>
+            </div>
           </div>
-        </div>
-      )}
+        )}
 
       {/* Hero */}
       <div className="relative overflow-hidden">
@@ -209,6 +212,7 @@ export default function HomePage() {
             )}
           </>
         )}
+      </div>
       </div>
     </div>
   );

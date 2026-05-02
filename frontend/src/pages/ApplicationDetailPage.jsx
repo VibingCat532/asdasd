@@ -31,7 +31,7 @@ function parseCodeFiles(answerValue) {
     const files = Array.isArray(parsed) ? parsed : [parsed];
     return files.map(normalizeCodeFile).filter(Boolean);
   } catch {
-    // keep as plain answer
+    // 
   }
   return [];
 }
@@ -152,7 +152,7 @@ export default function ApplicationDetailPage() {
               const parsed = JSON.parse(displayValue);
               if (Array.isArray(parsed)) displayValue = parsed.join(", ");
             } catch {
-              // keep as-is
+              // 
             }
           }
 

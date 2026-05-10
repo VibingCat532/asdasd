@@ -86,9 +86,19 @@ router.get('/:recruitmentId', async (req, res) => {
     // Check user application status if logged in
     let userCanApply = null;
     let userApplicationStatus = null;
+    let userIsBlacklisted = false;
+    let userApplyBlockReason = null;
 
     const userId = getUserIdFromRequest(req);
     if (userId) {
+      const blacklistResult = await query(
+        `SELECT 1 FROM recruitment_blacklist
+         WHERE user_id = $1 AND recruitment_id = $2
+         LIMIT 1`,
+        [userId, recruitmentId]
+      );
+      userIsBlacklisted = blacklistResult.rows.length > 0;
+
       const appResult = await query(
         `SELECT status FROM applications
          WHERE user_id = $1 AND recruitment_id = $2
@@ -99,14 +109,23 @@ router.get('/:recruitmentId', async (req, res) => {
       if (appResult.rows.length > 0) {
         userApplicationStatus = appResult.rows[0].status;
         userCanApply = appResult.rows[0].status === 'odrzucone';
+        if (!userCanApply) {
+          userApplyBlockReason = userApplicationStatus;
+        }
       } else {
         userCanApply = true;
+      }
+
+      if (userIsBlacklisted) {
+        userCanApply = false;
+        userApplyBlockReason = 'blacklisted';
       }
     }
 
     // Can only apply if recruitment is active
     if (recruitment.status !== 'active') {
       userCanApply = false;
+      userApplyBlockReason = 'inactive';
     }
 
     res.json({
@@ -121,6 +140,8 @@ router.get('/:recruitmentId', async (req, res) => {
       created_at: recruitment.created_at.toISOString(),
       user_can_apply: userCanApply,
       user_application_status: userApplicationStatus,
+      user_is_blacklisted: userIsBlacklisted,
+      user_apply_block_reason: userApplyBlockReason,
     });
   } catch (err) {
     logger.error('Failed to get recruitment details', err);

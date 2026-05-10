@@ -7,7 +7,7 @@ import { Badge } from "../components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import { Checkbox } from "../components/ui/checkbox";
 import { Separator } from "../components/ui/separator";
-import { ArrowLeft, Loader2, Send, AlertTriangle, CheckCircle, Lock, LogIn, FileCode, Upload, X } from "lucide-react";
+import { ArrowLeft, Loader2, Send, AlertTriangle, CheckCircle, Lock, LogIn, FileCode, Upload, X, Ban } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import axios from "axios";
 import { API } from "../lib/api";
@@ -195,6 +195,7 @@ export default function RecruitmentDetailPage() {
   const isClosed = recruitment.status !== "active";
   const canApply = recruitment.user_can_apply === true;
   const existingStatus = recruitment.user_application_status;
+  const isBlacklisted = recruitment.user_is_blacklisted === true || recruitment.user_apply_block_reason === "blacklisted";
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
@@ -266,7 +267,17 @@ export default function RecruitmentDetailPage() {
         </div>
       )}
 
-      {!isClosed && user && !canApply && existingStatus === "nowe" && (
+      {!isClosed && user && isBlacklisted && (
+        <div className="rounded-xl bg-red-500/5 border border-red-500/15 p-6 text-center" data-testid="blacklisted-notice">
+          <Ban className="w-8 h-8 text-red-300 mx-auto mb-3" />
+          <p className="text-zinc-300 font-medium" style={{ fontFamily: "'Outfit', sans-serif" }}>
+            Nie mozesz zlozyc podania w tej rekrutacji
+          </p>
+          <p className="text-zinc-600 text-sm mt-1">Twoje konto jest na blackliscie tej rekrutacji.</p>
+        </div>
+      )}
+
+      {!isClosed && user && !isBlacklisted && !canApply && existingStatus === "nowe" && (
         <div className="rounded-xl bg-[#00E5FF]/5 border border-[#00E5FF]/15 p-6 text-center" data-testid="already-applied-notice">
           <CheckCircle className="w-8 h-8 text-[#00E5FF] mx-auto mb-3" />
           <p className="text-zinc-300 font-medium" style={{ fontFamily: "'Outfit', sans-serif" }}>
@@ -281,7 +292,7 @@ export default function RecruitmentDetailPage() {
         </div>
       )}
 
-      {!isClosed && user && !canApply && existingStatus === "zaakceptowane" && (
+      {!isClosed && user && !isBlacklisted && !canApply && existingStatus === "zaakceptowane" && (
         <div className="rounded-xl bg-emerald-500/5 border border-emerald-500/15 p-6 text-center" data-testid="accepted-notice">
           <CheckCircle className="w-8 h-8 text-emerald-400 mx-auto mb-3" />
           <p className="text-zinc-300 font-medium" style={{ fontFamily: "'Outfit', sans-serif" }}>

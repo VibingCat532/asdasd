@@ -78,6 +78,19 @@ async function submitApplication(req, res) {
       return res.status(400).json({ error: 'Ta rekrutacja nie jest aktywna' });
     }
 
+    const blacklistResult = await query(
+      `SELECT 1 FROM recruitment_blacklist
+       WHERE user_id = $1 AND recruitment_id = $2
+       LIMIT 1`,
+      [userId, recruitmentId]
+    );
+
+    if (blacklistResult.rows.length > 0) {
+      return res.status(403).json({
+        error: 'Nie mozesz zlozyc podania w tej rekrutacji',
+      });
+    }
+
     // Check for existing applications
     const existingResult = await query(
       `SELECT id, status FROM applications

@@ -555,6 +555,116 @@ router.delete('/recruitments/:recruitmentId/access/:userId', requireAuth, async 
   }
 });
 
+router.get('/recruitments/:recruitmentId/blacklist', requireAuth, async (req, res) => {
+  try {
+    const staffUser = await getStaffUser(req);
+    if (!staffUser) {
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const { recruitmentId } = req.params;
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+    if (permission.notFound) {
+      return res.status(404).json({ error: 'Rekrutacja nie znaleziona' });
+    }
+    if (!permission.canManageAccess) {
+      return res.status(403).json({ error: 'Brak uprawnien do zarzadzania blacklista' });
+    }
+
+    const result = await query(
+      `SELECT u.id, u.discord_id, u.discord_username, u.discord_avatar, u.discord_global_name,
+              rb.created_at, cu.discord_username as created_by_username
+       FROM recruitment_blacklist rb
+       JOIN users u ON u.id = rb.user_id
+       LEFT JOIN users cu ON cu.id = rb.created_by
+       WHERE rb.recruitment_id = $1
+       ORDER BY rb.created_at DESC`,
+      [recruitmentId]
+    );
+
+    res.json(result.rows.map(r => ({
+      id: r.id,
+      discord_id: r.discord_id,
+      discord_username: r.discord_username,
+      discord_avatar: r.discord_avatar,
+      discord_global_name: r.discord_global_name,
+      created_by_username: r.created_by_username,
+      created_at: r.created_at.toISOString(),
+    })));
+  } catch (err) {
+    logger.error('Failed to list recruitment blacklist', err);
+    res.status(500).json({ error: 'Nie udalo sie pobrac blacklisty' });
+  }
+});
+
+router.post('/recruitments/:recruitmentId/blacklist', requireAuth, async (req, res) => {
+  try {
+    const staffUser = await getStaffUser(req);
+    if (!staffUser) {
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const { recruitmentId } = req.params;
+    const { user_id } = req.body;
+    if (!user_id) {
+      return res.status(422).json({ error: 'Wybierz uzytkownika' });
+    }
+
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+    if (permission.notFound) {
+      return res.status(404).json({ error: 'Rekrutacja nie znaleziona' });
+    }
+    if (!permission.canManageAccess) {
+      return res.status(403).json({ error: 'Brak uprawnien do zarzadzania blacklista' });
+    }
+
+    const userResult = await query('SELECT id FROM users WHERE id = $1', [user_id]);
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    await query(
+      `INSERT INTO recruitment_blacklist (recruitment_id, user_id, created_by)
+       VALUES ($1, $2, $3)
+       ON CONFLICT (recruitment_id, user_id) DO UPDATE SET created_by = EXCLUDED.created_by`,
+      [recruitmentId, user_id, staffUser.userId]
+    );
+
+    res.status(201).json({ success: true });
+  } catch (err) {
+    logger.error('Failed to add recruitment blacklist entry', err);
+    res.status(500).json({ error: 'Nie udalo sie dodac uzytkownika do blacklisty' });
+  }
+});
+
+router.delete('/recruitments/:recruitmentId/blacklist/:userId', requireAuth, async (req, res) => {
+  try {
+    const staffUser = await getStaffUser(req);
+    if (!staffUser) {
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const { recruitmentId, userId } = req.params;
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+    if (permission.notFound) {
+      return res.status(404).json({ error: 'Rekrutacja nie znaleziona' });
+    }
+    if (!permission.canManageAccess) {
+      return res.status(403).json({ error: 'Brak uprawnien do zarzadzania blacklista' });
+    }
+
+    await query(
+      'DELETE FROM recruitment_blacklist WHERE recruitment_id = $1 AND user_id = $2',
+      [recruitmentId, userId]
+    );
+
+    res.json({ success: true });
+  } catch (err) {
+    logger.error('Failed to remove recruitment blacklist entry', err);
+    res.status(500).json({ error: 'Nie udalo sie usunac uzytkownika z blacklisty' });
+  }
+});
+
 router.get('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
   try {
     const staffUser = await getStaffUser(req);

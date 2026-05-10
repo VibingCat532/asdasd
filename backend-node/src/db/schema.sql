@@ -121,3 +121,16 @@ CREATE INDEX IF NOT EXISTS idx_application_answers_application ON application_an
 CREATE INDEX IF NOT EXISTS idx_recruitment_questions_recruitment ON recruitment_questions(recruitment_id);
 CREATE INDEX IF NOT EXISTS idx_recruitment_access_recruitment ON recruitment_access(recruitment_id);
 CREATE INDEX IF NOT EXISTS idx_recruitment_access_user ON recruitment_access(user_id);
+
+-- Recruitment application blacklist
+CREATE TABLE IF NOT EXISTS recruitment_blacklist (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    recruitment_id UUID NOT NULL REFERENCES recruitments(id) ON DELETE CASCADE,
+    user_id UUID NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_by UUID REFERENCES users(id) ON DELETE SET NULL,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    UNIQUE(recruitment_id, user_id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_recruitment_blacklist_recruitment ON recruitment_blacklist(recruitment_id);
+CREATE INDEX IF NOT EXISTS idx_recruitment_blacklist_user ON recruitment_blacklist(user_id);

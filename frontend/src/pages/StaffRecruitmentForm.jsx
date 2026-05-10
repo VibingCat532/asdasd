@@ -9,7 +9,7 @@ import { Separator } from "../components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Loader2, ArrowLeft, Plus, Trash2, GripVertical, Save, Lock, AlertTriangle, UserPlus, X, ChevronUp, ChevronDown } from "lucide-react";
+import { Loader2, ArrowLeft, Plus, Trash2, GripVertical, Save, Lock, AlertTriangle, UserPlus, X, ChevronUp, ChevronDown, Ban } from "lucide-react";
 import axios from "axios";
 import { API } from "../lib/api";
 
@@ -48,6 +48,7 @@ export default function StaffRecruitmentForm() {
   const [form, setForm] = useState({ name: "", description: "", status: "active", theme_color: "#00E5FF", category: "general", scope: "", accepted_discord_role_id: "" });
   const [questions, setQuestions] = useState([]);
   const [accessUsers, setAccessUsers] = useState([]);
+  const [blacklistUsers, setBlacklistUsers] = useState([]);
   const [allUsers, setAllUsers] = useState([]);
   const [searchQ, setSearchQ] = useState("");
   const [pendingAccess, setPendingAccess] = useState({});
@@ -99,6 +100,14 @@ export default function StaffRecruitmentForm() {
     } catch {}
   }, [id, isEdit]);
 
+  const fetchBlacklist = useCallback(async () => {
+    if (!isEdit) return;
+    try {
+      const res = await axios.get(`${API}/staff/recruitments/${id}/blacklist`, { withCredentials: true });
+      setBlacklistUsers(res.data);
+    } catch {}
+  }, [id, isEdit]);
+
   const fetchUsers = useCallback(async () => {
     try {
       const res = await axios.get(`${API}/staff/users${searchQ ? `?q=${encodeURIComponent(searchQ)}` : ""}`, { withCredentials: true });
@@ -108,6 +117,7 @@ export default function StaffRecruitmentForm() {
 
   useEffect(() => { fetchRecruitment(); }, [fetchRecruitment]);
   useEffect(() => { if (isEdit && permissions.canManageAccess) fetchAccess(); }, [isEdit, permissions.canManageAccess, fetchAccess]);
+  useEffect(() => { if (isEdit && permissions.canManageAccess) fetchBlacklist(); }, [isEdit, permissions.canManageAccess, fetchBlacklist]);
   useEffect(() => { if (isEdit && permissions.canManageAccess) fetchUsers(); }, [isEdit, permissions.canManageAccess, fetchUsers]);
 
   const updateForm = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
@@ -209,6 +219,27 @@ export default function StaffRecruitmentForm() {
     }
   };
 
+  // Blacklist
+  const addBlacklist = async (userId) => {
+    try {
+      await axios.post(API + "/staff/recruitments/" + id + "/blacklist", {
+        user_id: userId,
+      }, { withCredentials: true });
+      fetchBlacklist();
+    } catch (err) {
+      setErrors([getApiError(err, "Nie udalo sie dodac uzytkownika do blacklisty")]);
+    }
+  };
+
+  const removeBlacklist = async (userId) => {
+    try {
+      await axios.delete(API + "/staff/recruitments/" + id + "/blacklist/" + userId, { withCredentials: true });
+      fetchBlacklist();
+    } catch (err) {
+      setErrors([getApiError(err, "Nie udalo sie usunac uzytkownika z blacklisty")]);
+    }
+  };
+
   // Save
   const handleSave = async () => {
     setSaving(true);
@@ -257,6 +288,8 @@ export default function StaffRecruitmentForm() {
 
   const accessUserIds = new Set(accessUsers.map(u => u.id));
   const availableUsers = allUsers.filter(u => !accessUserIds.has(u.id) && u.id !== user?.id);
+  const blacklistUserIds = new Set(blacklistUsers.map(u => u.id));
+  const availableBlacklistUsers = allUsers.filter(u => !blacklistUserIds.has(u.id) && u.id !== user?.id);
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8" data-testid="staff-recruitment-form">
@@ -284,6 +317,7 @@ export default function StaffRecruitmentForm() {
           {showBasicTab && <TabsTrigger value="basic" className="data-[state=active]:bg-[#00E5FF]/15 data-[state=active]:text-[#00E5FF]" data-testid="tab-basic">Podstawowe</TabsTrigger>}
           {showQuestionsTab && <TabsTrigger value="questions" className="data-[state=active]:bg-[#00E5FF]/15 data-[state=active]:text-[#00E5FF]" data-testid="tab-questions">Pytania ({questions.length})</TabsTrigger>}
           {showAccessTab && <TabsTrigger value="access" className="data-[state=active]:bg-[#00E5FF]/15 data-[state=active]:text-[#00E5FF]" data-testid="tab-access">Dostęp ({accessUsers.length})</TabsTrigger>}
+          {showAccessTab && <TabsTrigger value="blacklist" className="data-[state=active]:bg-red-500/15 data-[state=active]:text-red-300" data-testid="tab-blacklist">Blacklista ({blacklistUsers.length})</TabsTrigger>}
         </TabsList>
 
         {/* Basic Tab */}
@@ -493,6 +527,77 @@ export default function StaffRecruitmentForm() {
                         </div>
                       </div>
                       <button onClick={() => removeAccess(u.id)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors" data-testid={"remove-user-" + u.discord_username}>
+                        <X className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </TabsContent>
+        )}
+
+        {/* Blacklist Tab */}
+        {showAccessTab && (
+          <TabsContent value="blacklist" className="space-y-4">
+            <div className="rounded-lg bg-red-500/5 border border-red-500/15 p-4">
+              <div className="flex items-start gap-3">
+                <Ban className="w-4 h-4 text-red-300 mt-0.5 shrink-0" />
+                <div>
+                  <p className="text-sm text-red-200 font-medium">Blacklista podan</p>
+                  <p className="text-xs text-red-200/60 mt-1">
+                    Osoby dodane tutaj nie beda mogly zlozyc podania w tej rekrutacji po zalogowaniu.
+                  </p>
+                </div>
+              </div>
+            </div>
+            <div>
+              <Label className="text-zinc-300 mb-1.5 block text-sm">Dodaj uzytkownika do blacklisty</Label>
+              <Input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Szukaj po nazwie Discord..."
+                className="bg-black/40 border-white/10 text-zinc-100 mb-3" data-testid="blacklist-search" />
+              {availableBlacklistUsers.length > 0 && (
+                <div className="space-y-2 max-h-64 overflow-y-auto rounded-lg border border-white/5 p-2">
+                  {availableBlacklistUsers.map(u => (
+                    <div key={u.id}
+                      className="flex items-center gap-3 p-2 rounded-lg bg-white/[0.02] border border-white/5"
+                      data-testid={"blacklist-add-user-" + u.discord_username}>
+                      <Avatar className="w-7 h-7 border border-white/10">
+                        <AvatarImage src={u.discord_avatar ? "https://cdn.discordapp.com/avatars/" + u.discord_id + "/" + u.discord_avatar + ".png?size=64" : undefined} />
+                        <AvatarFallback className="bg-zinc-900 text-zinc-400 text-xs">{(u.discord_global_name||u.discord_username||"?")[0].toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-zinc-200 truncate">{u.discord_global_name || u.discord_username}</p>
+                        <p className="text-xs text-zinc-500">@{u.discord_username}</p>
+                      </div>
+                      <button onClick={() => addBlacklist(u.id)}
+                        className="p-2 rounded-lg bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors"
+                        data-testid={"confirm-blacklist-user-" + u.discord_username}
+                        title="Dodaj do blacklisty">
+                        <Ban className="w-4 h-4" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <Separator className="border-white/5" />
+            <div>
+              <Label className="text-zinc-300 mb-2 block text-sm">Zablokowani uzytkownicy ({blacklistUsers.length})</Label>
+              {blacklistUsers.length === 0 ? (
+                <p className="text-sm text-zinc-500">Brak uzytkownikow na blackliscie</p>
+              ) : (
+                <div className="space-y-2" data-testid="blacklist-users-list">
+                  {blacklistUsers.map(u => (
+                    <div key={u.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.02] border border-white/5" data-testid={"blacklist-user-" + u.discord_username}>
+                      <Avatar className="w-8 h-8 border border-white/10">
+                        <AvatarImage src={u.discord_avatar ? "https://cdn.discordapp.com/avatars/" + u.discord_id + "/" + u.discord_avatar + ".png?size=64" : undefined} />
+                        <AvatarFallback className="bg-zinc-900 text-zinc-400 text-xs">{(u.discord_global_name||u.discord_username||"?")[0].toUpperCase()}</AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-zinc-200 truncate">{u.discord_global_name || u.discord_username}</p>
+                        <p className="text-xs text-zinc-500">@{u.discord_username}</p>
+                      </div>
+                      <button onClick={() => removeBlacklist(u.id)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors" data-testid={"remove-blacklist-user-" + u.discord_username}>
                         <X className="w-4 h-4" />
                       </button>
                     </div>

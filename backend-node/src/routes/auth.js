@@ -26,13 +26,30 @@ function getFrontendUrl(req) {
     return process.env.FRONTEND_URL.replace(/\/$/, '');
   }
 
+  return getRequestBaseUrl(req) || (process.env.FRONTEND_URL || '/').replace(/\/$/, '');
+}
+
+function getRequestBaseUrl(req) {
   const protocol = req.headers['x-forwarded-proto'] || req.protocol || 'https';
   const host = req.headers['x-forwarded-host'] || req.headers.host;
   if (host) {
     return `${protocol}://${host}`;
   }
 
-  return (process.env.FRONTEND_URL || '/').replace(/\/$/, '');
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`.replace(/\/$/, '');
+  }
+
+  return null;
+}
+
+function getDiscordRedirectUri(req) {
+  if (process.env.DISCORD_REDIRECT_URI) {
+    return process.env.DISCORD_REDIRECT_URI;
+  }
+
+  const baseUrl = getRequestBaseUrl(req);
+  return baseUrl ? `${baseUrl}/api/auth/discord/callback` : '';
 }
 
 // ────────── Public Endpoints ──────────
@@ -42,11 +59,11 @@ function getFrontendUrl(req) {
  * Check if all required environment variables are set
  */
 router.get('/config-status', (req, res) => {
-  const redirectUri = process.env.DISCORD_REDIRECT_URI || '';
+  const redirectUri = getDiscordRedirectUri(req);
   const configStatus = {
     discord_client_id: !!process.env.DISCORD_CLIENT_ID,
     discord_client_secret: !!process.env.DISCORD_CLIENT_SECRET,
-    discord_redirect_uri: !!process.env.DISCORD_REDIRECT_URI,
+    discord_redirect_uri: !!redirectUri,
     discord_bot_token: !!process.env.DISCORD_BOT_TOKEN,
     discord_guild_id: !!process.env.DISCORD_GUILD_ID,
     discord_role_map: !!process.env.DISCORD_ROLE_MAP,
@@ -59,7 +76,7 @@ router.get('/config-status', (req, res) => {
     all_required_set: !!(
       process.env.DISCORD_CLIENT_ID &&
       process.env.DISCORD_CLIENT_SECRET &&
-      process.env.DISCORD_REDIRECT_URI &&
+      redirectUri &&
       process.env.DATABASE_URL &&
       process.env.JWT_SECRET
     ),
@@ -75,7 +92,7 @@ router.get('/config-status', (req, res) => {
 router.get('/discord/start', (req, res) => {
   const clientId = process.env.DISCORD_CLIENT_ID;
   const clientSecret = process.env.DISCORD_CLIENT_SECRET;
-  const redirectUri = process.env.DISCORD_REDIRECT_URI;
+  const redirectUri = getDiscordRedirectUri(req);
 
   const missing = [];
   if (!clientId) missing.push('DISCORD_CLIENT_ID');
@@ -100,7 +117,7 @@ router.get('/discord/start', (req, res) => {
   });
 
   // Redirect to Discord OAuth URL
-  const oauthUrl = getDiscordOAuthUrl(state);
+  const oauthUrl = getDiscordOAuthUrl(state, redirectUri);
   res.redirect(oauthUrl);
 });
 
@@ -130,7 +147,7 @@ router.get('/discord/callback', async (req, res) => {
 
   try {
     // Exchange code for tokens
-    const tokenData = await exchangeCodeForTokens(code);
+    const tokenData = await exchangeCodeForTokens(code, getDiscordRedirectUri(req));
     const accessToken = tokenData.access_token;
 
     if (!accessToken) {

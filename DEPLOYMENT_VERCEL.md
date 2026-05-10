@@ -107,6 +107,46 @@ Wróć do aplikacji Discord i dodaj finalny redirect URL:
 https://your-app.vercel.app/api/auth/discord/callback
 ```
 
+## Preview deployments
+
+Vercel tworzy Preview Deployment automatycznie, kiedy:
+- wypchniesz commit na branch inny niz branch produkcyjny, zwykle `main`
+- utworzysz pull request
+- uruchomisz deploy z CLI bez flagi produkcyjnej
+
+Mozesz tez uruchomic preview recznie:
+
+```bash
+npm run deploy:preview
+```
+
+Deploy produkcyjny zostaje osobno:
+
+```bash
+npm run deploy:production
+```
+
+### Zmienne srodowiskowe dla Preview
+
+W Vercel Settings -> Environment Variables zaznacz srodowisko `Preview` dla tych samych zmiennych, ktorych aplikacja potrzebuje do startu:
+
+```env
+DATABASE_URL=postgresql://...?sslmode=require
+DISCORD_CLIENT_ID=...
+DISCORD_CLIENT_SECRET=...
+DISCORD_BOT_TOKEN=...
+JWT_SECRET=...
+NODE_ENV=production
+```
+
+`DISCORD_REDIRECT_URI`, `FRONTEND_URL` i `CORS_ORIGINS` nie musza byc ustawione dla Preview, jezeli frontend i API dzialaja pod tym samym adresem Vercel. Backend zbuduje callback Discord z aktualnego preview URL, np.:
+
+```text
+https://twoj-branch-twoj-projekt.vercel.app/api/auth/discord/callback
+```
+
+Discord nadal wymaga, zeby callback URL byl dodany w Discord Developer Portal. Dla stabilnego testowania najwygodniej uzywac branch-specific preview URL albo preview deployment suffix/custom domain i dodac ten adres do OAuth2 -> Redirects.
+
 ## Krok 4: Testowanie
 
 ### 4.1 Sprawdź konfigurację API

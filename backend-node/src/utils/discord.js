@@ -11,10 +11,10 @@ const DISCORD_SCOPES = 'identify guilds.members.read guilds.join';
 /**
  * Build the Discord OAuth2 authorization URL
  */
-function getDiscordOAuthUrl(state) {
+function getDiscordOAuthUrl(state, redirectUri = process.env.DISCORD_REDIRECT_URI || '') {
   const params = new URLSearchParams({
     client_id: process.env.DISCORD_CLIENT_ID || '',
-    redirect_uri: process.env.DISCORD_REDIRECT_URI || '',
+    redirect_uri: redirectUri,
     response_type: 'code',
     scope: DISCORD_SCOPES,
     state,
@@ -27,7 +27,7 @@ function getDiscordOAuthUrl(state) {
 /**
  * Exchange authorization code for access + refresh tokens
  */
-async function exchangeCodeForTokens(code) {
+async function exchangeCodeForTokens(code, redirectUri = process.env.DISCORD_REDIRECT_URI || '') {
   try {
     const response = await axios.post(
       `${DISCORD_API_URL}/oauth2/token`,
@@ -36,7 +36,7 @@ async function exchangeCodeForTokens(code) {
         client_secret: process.env.DISCORD_CLIENT_SECRET || '',
         grant_type: 'authorization_code',
         code,
-        redirect_uri: process.env.DISCORD_REDIRECT_URI || '',
+        redirect_uri: redirectUri,
       }),
       {
         headers: {

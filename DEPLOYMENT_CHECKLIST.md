@@ -43,6 +43,14 @@
 
 ## Deployment Checklist
 
+## Preview Deployment Checklist
+
+- [ ] Push na branch inny niz production branch albo PR utworzy Preview Deployment automatycznie
+- [ ] Reczny preview mozna uruchomic komenda `npm run deploy:preview`
+- [ ] Zmienne `DATABASE_URL`, `DISCORD_CLIENT_ID`, `DISCORD_CLIENT_SECRET`, `DISCORD_BOT_TOKEN`, `JWT_SECRET`, `NODE_ENV` sa dodane takze dla srodowiska `Preview`
+- [ ] Preview callback Discord dodany w Discord Developer Portal: `https://twoj-preview-url.vercel.app/api/auth/discord/callback`
+- [ ] `DISCORD_REDIRECT_URI`, `FRONTEND_URL` i `CORS_ORIGINS` nie sa wymagane w Preview, jezeli aplikacja dziala pod jednym hostem Vercel
+
 ### Krok 1: Vercel Import
 - [ ] Projekt wybrany z GitHub
 - [ ] Framework auto-detektuje się jako React

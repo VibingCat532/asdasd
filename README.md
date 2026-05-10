@@ -67,7 +67,10 @@ See [SETUP_LOCAL.md](./SETUP_LOCAL.md) for detailed instructions.
 git push origin main
 
 # Deploy via Vercel
-vercel
+npm run deploy:preview
+
+# Production deploy
+npm run deploy:production
 ```
 
 See [DEPLOYMENT_VERCEL.md](./DEPLOYMENT_VERCEL.md) for complete guide.

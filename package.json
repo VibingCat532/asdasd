@@ -7,6 +7,8 @@
   },
   "scripts": {
     "build": "yarn --cwd frontend build",
+    "deploy:preview": "vercel",
+    "deploy:production": "vercel --prod",
     "install:all": "cd backend-node && npm ci && cd .. && yarn install --cwd frontend --ignore-engines --production=false --frozen-lockfile"
   }
 }

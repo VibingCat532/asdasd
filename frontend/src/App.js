@@ -1,5 +1,6 @@
 import "@/App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { Analytics } from "@vercel/analytics/react";
 import { AuthProvider } from "./hooks/useAuth";
 import Navbar from "./components/Navbar";
 import HomePage from "./pages/HomePage";
@@ -28,6 +29,7 @@ function App() {
             <Route path="/staff/recruitments/:id/applications" element={<StaffApplicationsPage />} />
             <Route path="/staff/recruitments/:recId/applications/:appId" element={<StaffApplicationDetailPage />} />
           </Routes>
+          <Analytics />
         </div>
       </AuthProvider>
     </BrowserRouter>

@@ -5,7 +5,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Badge } from "../components/ui/badge";
 import { Input } from "../components/ui/input";
 import { Separator } from "../components/ui/separator";
-import { AlertTriangle, ArrowLeft, Clock, Download, FileCode, History, Loader2, Search, UserRound } from "lucide-react";
+import { AlertTriangle, ArrowLeft, ChevronDown, Clock, Download, FileCode, History, Loader2, Search, UserRound } from "lucide-react";
 import axios from "axios";
 import { API } from "../lib/api";
 
@@ -288,6 +288,7 @@ function HistoryDetails({ user, applications }) {
 }
 
 function HistoryApplication({ application }) {
+  const [isOpen, setIsOpen] = useState(false);
   const status = STATUS_CFG[application.status] || STATUS_CFG.nowe;
   const questions = Array.isArray(application.questions_snapshot) ? application.questions_snapshot : [];
   const answers = Array.isArray(application.answers) ? application.answers : [];
@@ -297,6 +298,13 @@ function HistoryApplication({ application }) {
   }, {});
   const shownQuestionIds = new Set(questions.map((question) => String(question.id)));
   const extraAnswers = answers.filter((answer) => !shownQuestionIds.has(String(answer.question_id)));
+  const answerRows = [
+    ...questions.map((question) => ({ question, answer: answerMap[question.id] })),
+    ...extraAnswers.map((answer) => ({
+      question: { id: answer.question_id, label: answer.question_label, field_type: answer.question_type },
+      answer,
+    })),
+  ];
 
   return (
     <section className="rounded-xl bg-[#141418] border border-white/10 overflow-hidden" data-testid={`history-application-${application.id}`}>
@@ -324,16 +332,26 @@ function HistoryApplication({ application }) {
         <div className="flex flex-wrap gap-3 text-xs text-zinc-500" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
           <span className="flex items-center gap-1"><Clock className="w-3 h-3" />ID: {application.id}</span>
           <span>Kategoria: {application.recruitment?.category === "factions" ? "Frakcje" : "Ogolna"}</span>
+          <span>{answerRows.length} odpowiedzi</span>
         </div>
       </div>
 
       <Separator className="border-white/5" />
 
-      <div className="p-5 space-y-3">
-        {[...questions.map((question) => ({ question, answer: answerMap[question.id] })), ...extraAnswers.map((answer) => ({
-          question: { id: answer.question_id, label: answer.question_label, field_type: answer.question_type },
-          answer,
-        }))].map(({ question, answer }) => {
+      <div className="p-4">
+        <button
+          type="button"
+          onClick={() => setIsOpen((value) => !value)}
+          className="flex w-full items-center justify-between gap-3 rounded-lg border border-white/5 bg-black/20 px-4 py-3 text-left text-sm font-medium text-zinc-300 transition-colors hover:border-[#00E5FF]/25 hover:text-[#00E5FF]"
+          data-testid={`toggle-history-answers-${application.id}`}
+        >
+          <span>{isOpen ? "Ukryj odpowiedzi" : "Pokaz odpowiedzi"} ({answerRows.length})</span>
+          <ChevronDown className={`w-4 h-4 shrink-0 transition-transform ${isOpen ? "rotate-180" : ""}`} />
+        </button>
+
+        {isOpen && (
+          <div className="mt-4 space-y-3" data-testid={`history-answers-${application.id}`}>
+            {answerRows.map(({ question, answer }) => {
           const codeFiles = question.field_type === "code" ? parseCodeFiles(answer?.answer_value) : [];
           return (
             <div key={question.id} className="rounded-lg border border-white/5 bg-black/20 p-4">
@@ -371,7 +389,9 @@ function HistoryApplication({ application }) {
               )}
             </div>
           );
-        })}
+            })}
+          </div>
+        )}
       </div>
     </section>
   );

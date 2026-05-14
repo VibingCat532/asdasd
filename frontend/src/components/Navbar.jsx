@@ -2,7 +2,7 @@ import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { SiDiscord } from "react-icons/si";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
-import { LogOut, FileText, Home, LayoutDashboard } from "lucide-react";
+import { LogOut, FileText, Home, LayoutDashboard, History } from "lucide-react";
 import {
   Tooltip,
   TooltipContent,
@@ -21,6 +21,7 @@ export default function Navbar() {
   const isActive = (path) => location.pathname === path;
   const startsWith = (prefix) => location.pathname.startsWith(prefix);
   const isStaff = staffInfo?.is_staff;
+  const isManagement = staffInfo?.is_management === true;
 
   return (
     <TooltipProvider>
@@ -44,8 +45,12 @@ export default function Navbar() {
                 icon={<FileText className="w-3.5 h-3.5" />} label="Moje Aplikacje" testId="nav-moje-aplikacje" />
             )}
             {isStaff && (
-              <NavLink to="/staff" active={startsWith("/staff")}
+              <NavLink to="/staff" active={location.pathname === "/staff" || startsWith("/staff/recruitments")}
                 icon={<LayoutDashboard className="w-3.5 h-3.5" />} label="Panel" testId="nav-staff-panel" />
+            )}
+            {isManagement && (
+              <NavLink to="/staff/history" active={startsWith("/staff/history")}
+                icon={<History className="w-3.5 h-3.5" />} label="Historia" testId="nav-history" />
             )}
           </div>
 
@@ -55,6 +60,7 @@ export default function Navbar() {
               <div className="flex sm:hidden items-center gap-1">
                 <Link to="/my-applications" className="p-2 text-zinc-400 hover:text-zinc-200"><FileText className="w-4 h-4" /></Link>
                 {isStaff && <Link to="/staff" className="p-2 text-zinc-400 hover:text-zinc-200"><LayoutDashboard className="w-4 h-4" /></Link>}
+                {isManagement && <Link to="/staff/history" className="p-2 text-zinc-400 hover:text-zinc-200"><History className="w-4 h-4" /></Link>}
               </div>
             )}
             {user ? (

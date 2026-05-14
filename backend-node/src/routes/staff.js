@@ -139,6 +139,22 @@ async function getRecruitmentPermission(staffUser, recruitmentId) {
   return { hasAccess: false, capabilities };
 }
 
+async function requireManagementStaff(req, res) {
+  const staffUser = await getStaffUser(req);
+  if (!staffUser) {
+    res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    return null;
+  }
+
+  const capabilities = await resolveUserCapabilities(staffUser.discordId, staffUser.userId);
+  if (!capabilities.is_management) {
+    res.status(403).json({ error: 'Dostep tylko dla managementu' });
+    return null;
+  }
+
+  return { ...staffUser, capabilities };
+}
+
 async function applyAcceptedDiscordRole(recruitmentId, applicationId) {
   const botToken = process.env.DISCORD_BOT_TOKEN;
   if (!botToken) {
@@ -393,6 +409,162 @@ router.post('/recruitments', requireAuth, async (req, res) => {
   } catch (err) {
     logger.error('Failed to create recruitment', err);
     res.status(500).json({ error: 'Nie udało się utworzyć rekrutacji' });
+  }
+});
+
+router.get('/application-history/users', requireAuth, async (req, res) => {
+  try {
+    const staffUser = await requireManagementStaff(req, res);
+    if (!staffUser) return;
+
+    const q = String(req.query.q || '').trim();
+    const params = [];
+    let where = '';
+    if (q) {
+      params.push(`%${q}%`);
+      where = `WHERE u.discord_username ILIKE $1
+                  OR u.discord_global_name ILIKE $1
+                  OR u.discord_id ILIKE $1`;
+    }
+
+    const result = await query(
+      `SELECT u.id, u.discord_id, u.discord_username, u.discord_avatar, u.discord_global_name,
+              COUNT(a.id) as application_count,
+              MAX(a.created_at) as last_application_at
+       FROM users u
+       LEFT JOIN applications a ON a.user_id = u.id
+       ${where}
+       GROUP BY u.id
+       HAVING COUNT(a.id) > 0 OR $${params.length + 1}::boolean = true
+       ORDER BY MAX(a.created_at) DESC NULLS LAST, u.discord_username ASC
+       LIMIT 50`,
+      [...params, !!q]
+    );
+
+    res.json(result.rows.map(r => ({
+      id: r.id,
+      discord_id: r.discord_id,
+      discord_username: r.discord_username,
+      discord_avatar: r.discord_avatar,
+      discord_global_name: r.discord_global_name,
+      application_count: parseInt(r.application_count, 10),
+      last_application_at: r.last_application_at ? r.last_application_at.toISOString() : null,
+    })));
+  } catch (err) {
+    logger.error('Failed to search application history users', err);
+    res.status(500).json({ error: 'Nie udalo sie pobrac historii uzytkownikow' });
+  }
+});
+
+router.get('/application-history/users/:userId', requireAuth, async (req, res) => {
+  try {
+    const staffUser = await requireManagementStaff(req, res);
+    if (!staffUser) return;
+
+    const { userId } = req.params;
+    const userResult = await query(
+      `SELECT id, discord_id, discord_username, discord_avatar, discord_global_name
+       FROM users WHERE id = $1`,
+      [userId]
+    );
+
+    if (userResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const appsResult = await query(
+      `SELECT a.id, a.recruitment_id, a.status, a.recruitment_snapshot, a.questions_snapshot,
+              a.created_at, a.updated_at,
+              r.id as live_recruitment_id,
+              r.name as live_recruitment_name,
+              r.slug as live_recruitment_slug,
+              r.description as live_recruitment_description,
+              r.category as live_recruitment_category,
+              r.status as live_recruitment_status,
+              r.theme_color as live_recruitment_theme_color
+       FROM applications a
+       LEFT JOIN recruitments r ON r.id = a.recruitment_id
+       WHERE a.user_id = $1
+       ORDER BY a.created_at DESC`,
+      [userId]
+    );
+
+    const applicationIds = appsResult.rows.map(app => app.id);
+    let answersByApplication = new Map();
+    if (applicationIds.length > 0) {
+      const answersResult = await query(
+        `SELECT application_id, question_id, question_label, question_type, answer_value, created_at
+         FROM application_answers
+         WHERE application_id = ANY($1::uuid[])
+         ORDER BY created_at ASC`,
+        [applicationIds]
+      );
+
+      answersByApplication = answersResult.rows.reduce((map, answer) => {
+        if (!map.has(answer.application_id)) {
+          map.set(answer.application_id, []);
+        }
+        map.get(answer.application_id).push({
+          question_id: answer.question_id,
+          question_label: answer.question_label,
+          question_type: answer.question_type,
+          answer_value: answer.answer_value,
+        });
+        return map;
+      }, new Map());
+    }
+
+    const applications = appsResult.rows.map(app => {
+      const snapshot = app.recruitment_snapshot || {};
+      const recruitment = app.live_recruitment_id
+        ? {
+            id: app.live_recruitment_id,
+            name: app.live_recruitment_name,
+            slug: app.live_recruitment_slug,
+            description: app.live_recruitment_description,
+            category: app.live_recruitment_category || 'general',
+            status: app.live_recruitment_status,
+            theme_color: app.live_recruitment_theme_color,
+            deleted: false,
+          }
+        : {
+            id: snapshot.id || app.recruitment_id,
+            name: snapshot.name || 'Usunieta rekrutacja',
+            slug: snapshot.slug || null,
+            description: snapshot.description || '',
+            category: snapshot.category || 'general',
+            status: snapshot.status || null,
+            theme_color: snapshot.theme_color || '#00E5FF',
+            deleted: true,
+          };
+
+      return {
+        id: app.id,
+        status: app.status,
+        recruitment_id: app.recruitment_id,
+        recruitment,
+        recruitment_snapshot: snapshot,
+        questions_snapshot: app.questions_snapshot || [],
+        answers: answersByApplication.get(app.id) || [],
+        created_at: app.created_at.toISOString(),
+        updated_at: app.updated_at ? app.updated_at.toISOString() : app.created_at.toISOString(),
+      };
+    });
+
+    const user = userResult.rows[0];
+    res.json({
+      user: {
+        id: user.id,
+        discord_id: user.discord_id,
+        discord_username: user.discord_username,
+        discord_avatar: user.discord_avatar,
+        discord_global_name: user.discord_global_name,
+      },
+      applications,
+    });
+  } catch (err) {
+    logger.error('Failed to get user application history', err);
+    res.status(500).json({ error: 'Nie udalo sie pobrac historii podan' });
   }
 });
 

@@ -11,6 +11,7 @@ import StaffDashboard from "./pages/StaffDashboard";
 import StaffRecruitmentForm from "./pages/StaffRecruitmentForm";
 import StaffApplicationsPage from "./pages/StaffApplicationsPage";
 import StaffApplicationDetailPage from "./pages/StaffApplicationDetailPage";
+import StaffApplicationHistoryPage from "./pages/StaffApplicationHistoryPage";
 
 function App() {
   return (
@@ -28,6 +29,7 @@ function App() {
             <Route path="/staff/recruitments/:id/edit" element={<StaffRecruitmentForm />} />
             <Route path="/staff/recruitments/:id/applications" element={<StaffApplicationsPage />} />
             <Route path="/staff/recruitments/:recId/applications/:appId" element={<StaffApplicationDetailPage />} />
+            <Route path="/staff/history" element={<StaffApplicationHistoryPage />} />
           </Routes>
           <Analytics />
         </div>

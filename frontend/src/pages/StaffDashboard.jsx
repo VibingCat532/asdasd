@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { Badge } from "../components/ui/badge";
 import { Switch } from "../components/ui/switch";
-import { Loader2, Plus, ShieldCheck, Users, FileText, Settings, AlertTriangle, Lock, Trash2 } from "lucide-react";
+import { Loader2, Plus, ShieldCheck, Users, FileText, Settings, AlertTriangle, Lock, Trash2, History } from "lucide-react";
 import axios from "axios";
 import { API } from "../lib/api";
 
@@ -71,6 +71,7 @@ export default function StaffDashboard() {
   }
 
   const mappedRoles = Array.isArray(staffInfo.roles) ? staffInfo.roles : [];
+  const isManagement = staffInfo?.is_management === true;
 
   const handleDeleteRecruitment = async (rec) => {
     if (!window.confirm('Usunac rekrutacje "' + rec.name + '"?')) return;
@@ -127,19 +128,31 @@ export default function StaffDashboard() {
           Discord roles: {staffInfo.discord_role_count ?? 0} | source: {staffInfo.role_resolution_source || "unknown"} | guild: {staffInfo.configured_guild_id || "unknown"}
         </p>
 
-        {staffInfo.can_create_recruitment ? (
-          <Link
-            to="/staff/recruitments/new"
-            className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-[#00E5FF] text-black hover:bg-[#00E5FF]/90 transition-colors"
-            data-testid="create-recruitment-button"
-          >
-            <Plus className="w-4 h-4" /> Nowa Rekrutacja
-          </Link>
-        ) : staffInfo.creation_limit_reached ? (
-          <p className="text-sm text-zinc-500" data-testid="creation-limit-reached">
-            Osiagnieto limit rekrutacji (max 1 dla opiekuna)
-          </p>
-        ) : null}
+        <div className="flex flex-wrap gap-2">
+          {staffInfo.can_create_recruitment ? (
+            <Link
+              to="/staff/recruitments/new"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-[#00E5FF] text-black hover:bg-[#00E5FF]/90 transition-colors"
+              data-testid="create-recruitment-button"
+            >
+              <Plus className="w-4 h-4" /> Nowa Rekrutacja
+            </Link>
+          ) : staffInfo.creation_limit_reached ? (
+            <p className="text-sm text-zinc-500" data-testid="creation-limit-reached">
+              Osiagnieto limit rekrutacji (max 1 dla opiekuna)
+            </p>
+          ) : null}
+
+          {isManagement && (
+            <Link
+              to="/staff/history"
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border border-white/10 text-zinc-300 hover:border-[#00E5FF]/30 hover:text-[#00E5FF] transition-colors"
+              data-testid="application-history-button"
+            >
+              <History className="w-4 h-4" /> Historia Podan
+            </Link>
+          )}
+        </div>
       </div>
 
       {loading ? (

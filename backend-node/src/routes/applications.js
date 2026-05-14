@@ -64,7 +64,8 @@ async function submitApplication(req, res) {
   try {
     // Check recruitment exists and is active
     const recResult = await query(
-      'SELECT id, status FROM recruitments WHERE id = $1',
+      `SELECT id, name, slug, description, status, category, theme_color, created_at
+       FROM recruitments WHERE id = $1`,
       [recruitmentId]
     );
 
@@ -176,13 +177,23 @@ async function submitApplication(req, res) {
       required: q.required,
       sort_order: q.sort_order,
     }));
+    const recruitmentSnapshot = {
+      id: recruitment.id,
+      name: recruitment.name,
+      slug: recruitment.slug,
+      description: recruitment.description,
+      category: recruitment.category || 'general',
+      status: recruitment.status,
+      theme_color: recruitment.theme_color,
+      created_at: recruitment.created_at?.toISOString?.() || recruitment.created_at,
+    };
 
     // Insert application
     const appResult = await query(
-      `INSERT INTO applications (recruitment_id, user_id, status, questions_snapshot)
-       VALUES ($1, $2, 'nowe', $3)
+      `INSERT INTO applications (recruitment_id, user_id, status, recruitment_snapshot, questions_snapshot)
+       VALUES ($1, $2, 'nowe', $3, $4)
        RETURNING id, created_at`,
-      [recruitmentId, userId, JSON.stringify(questionsSnapshot)]
+      [recruitmentId, userId, JSON.stringify(recruitmentSnapshot), JSON.stringify(questionsSnapshot)]
     );
 
     const applicationId = appResult.rows[0].id;
@@ -229,9 +240,10 @@ router.get('/', requireAuth, async (req, res) => {
 
   try {
     const result = await query(
-      `SELECT a.id, a.status, a.created_at, r.name as recruitment_name, a.recruitment_id
+      `SELECT a.id, a.status, a.created_at, a.recruitment_id, a.recruitment_snapshot,
+              COALESCE(r.name, a.recruitment_snapshot->>'name', 'Usunieta rekrutacja') as recruitment_name
        FROM applications a
-       JOIN recruitments r ON r.id = a.recruitment_id
+       LEFT JOIN recruitments r ON r.id = a.recruitment_id
        WHERE a.user_id = $1
        ORDER BY a.created_at DESC`,
       [userId]
@@ -241,6 +253,8 @@ router.get('/', requireAuth, async (req, res) => {
       id: r.id,
       recruitment_name: r.recruitment_name,
       recruitment_id: r.recruitment_id,
+      recruitment_deleted: !r.recruitment_id,
+      recruitment_snapshot: r.recruitment_snapshot,
       status: r.status,
       created_at: r.created_at.toISOString(),
     }));
@@ -263,9 +277,10 @@ router.get('/:applicationId', requireAuth, async (req, res) => {
   try {
     // Fetch application (must belong to current user)
     const appResult = await query(
-      `SELECT a.id, a.status, a.questions_snapshot, a.created_at, a.recruitment_id, r.name as recruitment_name
+      `SELECT a.id, a.status, a.questions_snapshot, a.created_at, a.recruitment_id, a.recruitment_snapshot,
+              COALESCE(r.name, a.recruitment_snapshot->>'name', 'Usunieta rekrutacja') as recruitment_name
        FROM applications a
-       JOIN recruitments r ON r.id = a.recruitment_id
+       LEFT JOIN recruitments r ON r.id = a.recruitment_id
        WHERE a.id = $1 AND a.user_id = $2`,
       [applicationId, userId]
     );
@@ -294,6 +309,8 @@ router.get('/:applicationId', requireAuth, async (req, res) => {
       id: application.id,
       recruitment_name: application.recruitment_name,
       recruitment_id: application.recruitment_id,
+      recruitment_deleted: !application.recruitment_id,
+      recruitment_snapshot: application.recruitment_snapshot,
       status: application.status,
       questions_snapshot: application.questions_snapshot,
       answers,

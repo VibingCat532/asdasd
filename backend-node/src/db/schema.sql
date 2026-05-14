@@ -63,13 +63,35 @@ CREATE TABLE IF NOT EXISTS recruitment_questions (
 -- Applications
 CREATE TABLE IF NOT EXISTS applications (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    recruitment_id UUID NOT NULL REFERENCES recruitments(id) ON DELETE CASCADE,
+    recruitment_id UUID REFERENCES recruitments(id) ON DELETE SET NULL,
     user_id UUID NOT NULL REFERENCES users(id),
     status TEXT NOT NULL DEFAULT 'nowe',
+    recruitment_snapshot JSONB,
     questions_snapshot JSONB NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE applications
+ADD COLUMN IF NOT EXISTS recruitment_snapshot JSONB;
+
+ALTER TABLE applications
+ALTER COLUMN recruitment_id DROP NOT NULL;
+
+UPDATE applications a
+SET recruitment_snapshot = jsonb_build_object(
+    'id', r.id,
+    'name', r.name,
+    'slug', r.slug,
+    'description', r.description,
+    'category', r.category,
+    'status', r.status,
+    'theme_color', r.theme_color,
+    'created_at', r.created_at
+)
+FROM recruitments r
+WHERE a.recruitment_id = r.id
+  AND a.recruitment_snapshot IS NULL;
 
 -- Application answers
 CREATE TABLE IF NOT EXISTS application_answers (
@@ -112,7 +134,7 @@ BEGIN
 
     ALTER TABLE applications
     ADD CONSTRAINT applications_recruitment_id_fkey
-    FOREIGN KEY (recruitment_id) REFERENCES recruitments(id) ON DELETE CASCADE;
+    FOREIGN KEY (recruitment_id) REFERENCES recruitments(id) ON DELETE SET NULL;
 END $$;
 
 -- Indexes

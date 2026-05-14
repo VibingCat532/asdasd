@@ -161,7 +161,7 @@ export default function StaffApplicationHistoryPage() {
 
       <div className="hs-animate-fade-up mb-6">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00E5FF] mb-2" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-          Management
+          Opiekun Podań
         </p>
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight uppercase" style={{ fontFamily: "'Unbounded', sans-serif", color: "#FAFAFA" }}>
           Historia podan

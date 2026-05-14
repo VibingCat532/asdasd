@@ -33,9 +33,9 @@ export default function Navbar() {
         <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2 group" data-testid="nav-logo">
             <span className="text-base font-bold tracking-tight transition-colors group-hover:text-[#00E5FF]"
-              style={{ fontFamily: "'Unbounded', sans-serif", color: "#FAFAFA" }}>Hood</span>
+              style={{ fontFamily: "'Unbounded', sans-serif", color: "#FAFAFA" }}>HOOD</span>
             <span className="text-base font-bold tracking-tight"
-              style={{ fontFamily: "'Unbounded', sans-serif", color: "#00E5FF" }}>Stories</span>
+              style={{ fontFamily: "'Unbounded', sans-serif", color: "#00E5FF" }}>STORIES</span>
           </Link>
 
           <div className="hidden sm:flex items-center gap-1">

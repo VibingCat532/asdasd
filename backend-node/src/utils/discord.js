@@ -167,6 +167,48 @@ async function addGuildMemberRole(guildId, userId, roleId, botToken) {
   }
 }
 
+/**
+ * Send a direct message to a Discord user using the bot account.
+ */
+async function sendDiscordDirectMessage(userId, content, botToken) {
+  try {
+    const channelResponse = await axios.post(
+      `${DISCORD_API_URL}/users/@me/channels`,
+      { recipient_id: userId },
+      {
+        headers: {
+          Authorization: `Bot ${botToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      }
+    );
+
+    const channelId = channelResponse.data?.id;
+    if (!channelId) {
+      logger.error('Discord direct message channel creation returned no channel id');
+      return false;
+    }
+
+    await axios.post(
+      `${DISCORD_API_URL}/channels/${channelId}/messages`,
+      { content },
+      {
+        headers: {
+          Authorization: `Bot ${botToken}`,
+          'Content-Type': 'application/json',
+        },
+        timeout: 10000,
+      }
+    );
+
+    return true;
+  } catch (err) {
+    logger.error('Discord direct message send failed', err.response?.data || err.message);
+    return false;
+  }
+}
+
 module.exports = {
   getDiscordOAuthUrl,
   exchangeCodeForTokens,
@@ -175,4 +217,5 @@ module.exports = {
   getCurrentUserGuildMemberRoles,
   addGuildMember,
   addGuildMemberRole,
+  sendDiscordDirectMessage,
 };

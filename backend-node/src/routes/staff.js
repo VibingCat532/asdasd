@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const { query } = require('../db');
 const { requireAuth, getUserIdFromRequest } = require('../utils/auth');
 const { resolveUserCapabilities, checkRecruitmentAccess, GUILD_ID } = require('../utils/roles');
-const { addGuildMember, addGuildMemberRole } = require('../utils/discord');
+const { addGuildMember, addGuildMemberRole, sendDiscordDirectMessage } = require('../utils/discord');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -186,6 +186,57 @@ async function applyAcceptedDiscordRole(recruitmentId, applicationId) {
     joined,
     role_added: roleAdded,
     reason: row.access_token ? null : 'missing_user_oauth_token_role_only',
+  };
+}
+
+function buildApplicationStatusMessage(status, recruitmentName) {
+  const safeRecruitmentName = recruitmentName || 'rekrutacji';
+
+  if (status === 'zaakceptowane') {
+    return `Czesc! Twoje podanie do "${safeRecruitmentName}" zostalo zaakceptowane. Gratulacje!`;
+  }
+
+  if (status === 'odrzucone') {
+    return `Czesc! Twoje podanie do "${safeRecruitmentName}" zostalo odrzucone. Dziekujemy za poswiecony czas.`;
+  }
+
+  return null;
+}
+
+async function notifyApplicantApplicationStatus(recruitmentId, applicationId, status) {
+  const botToken = process.env.DISCORD_BOT_TOKEN;
+  if (!botToken) {
+    return { attempted: false, success: false, reason: 'missing_bot_token' };
+  }
+
+  const result = await query(
+    `SELECT r.name as recruitment_name, u.discord_id
+     FROM applications a
+     JOIN recruitments r ON r.id = a.recruitment_id
+     JOIN users u ON u.id = a.user_id
+     WHERE a.id = $1 AND a.recruitment_id = $2`,
+    [applicationId, recruitmentId]
+  );
+
+  const row = result.rows[0];
+  if (!row) {
+    return { attempted: false, success: false, reason: 'application_not_found' };
+  }
+  if (!row.discord_id) {
+    return { attempted: false, success: false, reason: 'missing_discord_id' };
+  }
+
+  const message = buildApplicationStatusMessage(status, row.recruitment_name);
+  if (!message) {
+    return { attempted: false, success: false, reason: 'status_not_notifiable' };
+  }
+
+  const sent = await sendDiscordDirectMessage(row.discord_id, message, botToken);
+
+  return {
+    attempted: true,
+    success: sent,
+    reason: sent ? null : 'discord_dm_failed',
   };
 }
 
@@ -1442,9 +1493,18 @@ router.patch('/recruitments/:recruitmentId/applications/:applicationId/status', 
     }
 
     const result = await query(
-      `UPDATE applications SET status = $1, updated_at = NOW()
-       WHERE id = $2 AND recruitment_id = $3
-       RETURNING id, status, updated_at`,
+      `WITH previous AS (
+         SELECT id, status
+         FROM applications
+         WHERE id = $2 AND recruitment_id = $3
+       ),
+       updated AS (
+         UPDATE applications SET status = $1, updated_at = NOW()
+         WHERE id = (SELECT id FROM previous)
+         RETURNING id, status, updated_at
+       )
+       SELECT updated.id, updated.status, updated.updated_at, previous.status as previous_status
+       FROM updated, previous`,
       [status, applicationId, recruitmentId]
     );
 
@@ -1452,17 +1512,28 @@ router.patch('/recruitments/:recruitmentId/applications/:applicationId/status', 
       return res.status(404).json({ error: 'Aplikacja nie znaleziona' });
     }
 
+    const app = result.rows[0];
     let discord_role_result = null;
     if (status === 'zaakceptowane') {
       discord_role_result = await applyAcceptedDiscordRole(recruitmentId, applicationId);
     }
 
-    const app = result.rows[0];
+    let discord_dm_result = null;
+    if (app.previous_status !== status && ['zaakceptowane', 'odrzucone'].includes(status)) {
+      try {
+        discord_dm_result = await notifyApplicantApplicationStatus(recruitmentId, applicationId, status);
+      } catch (notifyErr) {
+        logger.error('Failed to notify applicant about application status', notifyErr);
+        discord_dm_result = { attempted: true, success: false, reason: 'notification_error' };
+      }
+    }
+
     res.json({
       id: app.id,
       status: app.status,
       updated_at: app.updated_at.toISOString(),
       discord_role_result,
+      discord_dm_result,
     });
   } catch (err) {
     logger.error('Failed to update application status', err);

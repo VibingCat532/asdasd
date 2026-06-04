@@ -1470,11 +1470,43 @@ router.get('/recruitments/:recruitmentId/applications/:applicationId', requireAu
         question_type: a.question_type,
         answer_value: a.answer_value,
       })),
+      can_delete_application: permission.capabilities?.is_management === true,
       created_at: application.created_at.toISOString(),
     });
   } catch (err) {
     logger.error('Failed to get application details', err);
     res.status(500).json({ error: 'Nie udalo sie pobrac szczegolow aplikacji' });
+  }
+});
+
+router.delete('/recruitments/:recruitmentId/applications/:applicationId', requireAuth, async (req, res) => {
+  try {
+    const staffUser = await getStaffUser(req);
+    if (!staffUser) {
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    }
+
+    const capabilities = await resolveUserCapabilities(staffUser.discordId, staffUser.userId);
+    if (!capabilities.is_management) {
+      return res.status(403).json({ error: 'Brak uprawnien do usuniecia podania' });
+    }
+
+    const { recruitmentId, applicationId } = req.params;
+    const result = await query(
+      `DELETE FROM applications
+       WHERE id = $1 AND recruitment_id = $2
+       RETURNING id`,
+      [applicationId, recruitmentId]
+    );
+
+    if (result.rows.length === 0) {
+      return res.status(404).json({ error: 'Podanie nie znalezione' });
+    }
+
+    res.json({ success: true, message: 'Podanie usuniete' });
+  } catch (err) {
+    logger.error('Failed to delete application', err);
+    res.status(500).json({ error: 'Nie udalo sie usunac podania' });
   }
 });
 

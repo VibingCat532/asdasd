@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { Badge } from "../components/ui/badge";
 import { Separator } from "../components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
-import { Loader2, ArrowLeft, CheckCircle, XCircle, Clock, AlertTriangle, FileCode, Download } from "lucide-react";
+import { Loader2, ArrowLeft, CheckCircle, XCircle, Clock, AlertTriangle, FileCode, Download, Trash2 } from "lucide-react";
 import axios from "axios";
 import { API } from "../lib/api";
 
@@ -56,11 +56,13 @@ function downloadCodeFile(code) {
 
 export default function StaffApplicationDetailPage() {
   const { recId, appId } = useParams();
+  const navigate = useNavigate();
   const { user } = useAuth();
   const [app, setApp] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [changing, setChanging] = useState(false);
+  const [deleting, setDeleting] = useState(false);
 
   const fetchApp = () => {
     if (!user) { setLoading(false); return; }
@@ -82,6 +84,20 @@ export default function StaffApplicationDetailPage() {
       setError(err.response?.data?.detail || "Błąd zmiany statusu");
     } finally {
       setChanging(false);
+    }
+  };
+
+  const deleteApplication = async () => {
+    if (!window.confirm("Na pewno usunac to podanie? Tej akcji nie mozna cofnac.")) return;
+
+    setDeleting(true);
+    setError(null);
+    try {
+      await axios.delete(`${API}/staff/recruitments/${recId}/applications/${appId}`, { withCredentials: true });
+      navigate(`/staff/recruitments/${recId}/applications`);
+    } catch (err) {
+      setError(err.response?.data?.error || err.response?.data?.detail || "Nie udalo sie usunac podania");
+      setDeleting(false);
     }
   };
 
@@ -148,6 +164,21 @@ export default function StaffApplicationDetailPage() {
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-red-500/15 text-red-400 border border-red-500/30 hover:bg-red-500/25 transition-colors disabled:opacity-50"
               data-testid="reject-button">
               <XCircle className="w-4 h-4" />{changing ? "..." : "Odrzuć"}
+            </button>
+          </div>
+        )}
+
+        {app.can_delete_application && (
+          <div className="mt-4 pt-4 border-t border-white/5">
+            <button
+              type="button"
+              onClick={deleteApplication}
+              disabled={deleting}
+              className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-red-500/10 text-red-300 border border-red-500/25 hover:bg-red-500/20 transition-colors disabled:opacity-50"
+              data-testid="delete-application-button"
+            >
+              {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              {deleting ? "Usuwanie..." : "Usun podanie"}
             </button>
           </div>
         )}

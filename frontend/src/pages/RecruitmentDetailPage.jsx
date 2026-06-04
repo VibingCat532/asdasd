@@ -154,11 +154,23 @@ export default function RecruitmentDetailPage() {
 
   const goToNextSection = (section) => {
     if (!validateSection(section)) return;
-    setCurrentSectionIndex((prev) => Math.min(prev + 1, buildQuestionSections(recruitment?.questions || []).length - 1));
+    const lastSectionIndex = Math.max(buildQuestionSections(recruitment?.questions || []).length - 1, 0);
+    setCurrentSectionIndex((prev) => Math.min(prev + 1, lastSectionIndex));
   };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    const sections = buildQuestionSections(recruitment?.questions || []);
+    const activeSection = sections[currentSectionIndex] || sections[0];
+    const lastSectionIndex = Math.max(sections.length - 1, 0);
+
+    if (currentSectionIndex < lastSectionIndex) {
+      if (validateSection(activeSection)) {
+        setCurrentSectionIndex((prev) => Math.min(prev + 1, lastSectionIndex));
+      }
+      return;
+    }
+
     if (!validateClient()) return;
     setSubmitting(true);
     try {

@@ -432,11 +432,12 @@ router.post('/recruitments', requireAuth, async (req, res) => {
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
       await query(
-        `INSERT INTO recruitment_questions (recruitment_id, sort_order, label, field_type, options, required)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+        `INSERT INTO recruitment_questions (recruitment_id, sort_order, section_title, label, field_type, options, required)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
           recruitmentId,
           q.sort_order || i,
+          String(q.section_title || '').trim() || null,
           q.label,
           q.field_type,
           q.options ? JSON.stringify(q.options) : null,
@@ -912,7 +913,7 @@ router.get('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
 
     const recruitment = recResult.rows[0];
     const questionsResult = await query(
-      `SELECT id, label, field_type, options, required, sort_order
+      `SELECT id, label, field_type, options, required, sort_order, section_title
        FROM recruitment_questions WHERE recruitment_id = $1
        ORDER BY sort_order ASC`,
       [recruitmentId]
@@ -942,6 +943,7 @@ router.get('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
         options: q.options,
         required: q.required,
         sort_order: q.sort_order,
+        section_title: q.section_title || '',
       })),
       created_at: recruitment.created_at.toISOString(),
     });
@@ -988,7 +990,7 @@ router.get('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
 
     // Fetch questions
     const questionsResult = await query(
-      `SELECT id, label, field_type, options, required, sort_order
+      `SELECT id, label, field_type, options, required, sort_order, section_title
        FROM recruitment_questions WHERE recruitment_id = $1
        ORDER BY sort_order ASC`,
       [recruitmentId]
@@ -1012,6 +1014,7 @@ router.get('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
         options: q.options,
         required: q.required,
         sort_order: q.sort_order,
+        section_title: q.section_title || '',
       })),
       created_at: recruitment.created_at.toISOString(),
     });
@@ -1299,11 +1302,12 @@ async function updateRecruitmentQuestions(req, res) {
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
       await query(
-        `INSERT INTO recruitment_questions (recruitment_id, sort_order, label, field_type, options, required)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+        `INSERT INTO recruitment_questions (recruitment_id, sort_order, section_title, label, field_type, options, required)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
           recruitmentId,
           q.sort_order || i,
+          String(q.section_title || '').trim() || null,
           q.label,
           q.field_type,
           q.options ? JSON.stringify(q.options) : null,
@@ -1345,11 +1349,12 @@ router.post('/recruitments/:recruitmentId/questions', requireAuth, async (req, r
     for (let i = 0; i < questions.length; i++) {
       const q = questions[i];
       await query(
-        `INSERT INTO recruitment_questions (recruitment_id, sort_order, label, field_type, options, required)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
+        `INSERT INTO recruitment_questions (recruitment_id, sort_order, section_title, label, field_type, options, required)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)`,
         [
           recruitmentId,
           q.sort_order || i,
+          String(q.section_title || '').trim() || null,
           q.label,
           q.field_type,
           q.options ? JSON.stringify(q.options) : null,

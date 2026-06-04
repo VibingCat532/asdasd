@@ -124,8 +124,15 @@ export default function StaffRecruitmentForm() {
   const getApiError = (err, fallback) => err.response?.data?.error || err.response?.data?.detail || fallback;
 
   // Questions
-  const addQuestion = () => {
-    setQuestions(prev => [...prev, { _key: crypto.randomUUID(), label: "", field_type: "short_text", required: true, options: null, sort_order: prev.length }]);
+  const addQuestion = (sectionTitle) => {
+    setQuestions(prev => {
+      const section_title = sectionTitle !== undefined ? sectionTitle : (prev[prev.length - 1]?.section_title || "");
+      return [...prev, { _key: crypto.randomUUID(), section_title, label: "", field_type: "short_text", required: true, options: null, sort_order: prev.length }];
+    });
+  };
+  const addSection = () => {
+    const existingCount = new Set(questions.map(q => (q.section_title || "").trim()).filter(Boolean)).size;
+    addQuestion(existingCount === 0 ? "Sekcja OOC" : `Sekcja ${existingCount + 1}`);
   };
   const updateQuestion = (idx, field, value) => {
     setQuestions(prev => prev.map((q, i) => i === idx ? { ...q, [field]: value } : q));
@@ -246,6 +253,7 @@ export default function StaffRecruitmentForm() {
     setErrors([]);
     try {
       const qPayload = questions.map((q, i) => ({
+        section_title: (q.section_title || "").trim(),
         label: q.label, field_type: q.field_type, required: q.required,
         options: (q.field_type === "single_choice" || q.field_type === "multi_choice") ? (q.options || []).filter(o => o.trim()) : null,
         sort_order: i,
@@ -388,8 +396,18 @@ export default function StaffRecruitmentForm() {
                   <button onClick={() => moveQuestion(idx, 1)} className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30" disabled={idx === questions.length - 1}><ChevronDown className="w-3.5 h-3.5" /></button>
                 </div>
                 <div className="flex-1 space-y-3">
-                  <Input value={q.label} onChange={e => updateQuestion(idx, "label", e.target.value)} placeholder="Treść pytania..."
-                    className="bg-black/40 border-white/10 text-zinc-100 text-sm" data-testid={`q-label-${idx}`} />
+                  <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
+                    <div>
+                      <Label className="text-xs text-zinc-500 mb-1.5 block">Sekcja</Label>
+                      <Input value={q.section_title || ""} onChange={e => updateQuestion(idx, "section_title", e.target.value)} placeholder="np. Sekcja OOC"
+                        className="bg-black/40 border-white/10 text-zinc-100 text-xs" data-testid={`q-section-${idx}`} />
+                    </div>
+                    <div>
+                      <Label className="text-xs text-zinc-500 mb-1.5 block">Pytanie</Label>
+                      <Input value={q.label} onChange={e => updateQuestion(idx, "label", e.target.value)} placeholder="Treść pytania..."
+                        className="bg-black/40 border-white/10 text-zinc-100 text-sm" data-testid={`q-label-${idx}`} />
+                    </div>
+                  </div>
                   <div className="flex items-center gap-3 flex-wrap">
                     <Select value={q.field_type} onValueChange={v => {
                       updateQuestion(idx, "field_type", v);
@@ -431,10 +449,15 @@ export default function StaffRecruitmentForm() {
               </div>
             </div>
           ))}
-          <button onClick={addQuestion}
+          <button onClick={() => addQuestion()}
             className="w-full py-3 rounded-xl border border-dashed border-white/10 text-sm text-zinc-500 hover:text-[#00E5FF] hover:border-[#00E5FF]/30 transition-colors flex items-center justify-center gap-2"
             data-testid="add-question-button">
             <Plus className="w-4 h-4" />Dodaj pytanie
+          </button>
+          <button onClick={addSection}
+            className="w-full py-3 rounded-xl border border-dashed border-[#00E5FF]/20 text-sm text-[#00E5FF] hover:bg-[#00E5FF]/5 transition-colors flex items-center justify-center gap-2"
+            data-testid="add-section-button">
+            <Plus className="w-4 h-4" />Dodaj sekcje
           </button>
         </TabsContent>}
 

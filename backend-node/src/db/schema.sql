@@ -53,12 +53,16 @@ CREATE TABLE IF NOT EXISTS recruitment_questions (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     recruitment_id UUID NOT NULL REFERENCES recruitments(id) ON DELETE CASCADE,
     sort_order INTEGER NOT NULL DEFAULT 0,
+    section_title TEXT,
     label TEXT NOT NULL,
     field_type TEXT NOT NULL,
     options JSONB,
     required BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE recruitment_questions
+ADD COLUMN IF NOT EXISTS section_title TEXT;
 
 -- Applications
 CREATE TABLE IF NOT EXISTS applications (

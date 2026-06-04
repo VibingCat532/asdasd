@@ -7,7 +7,7 @@ import { Badge } from "../components/ui/badge";
 import { RadioGroup, RadioGroupItem } from "../components/ui/radio-group";
 import { Checkbox } from "../components/ui/checkbox";
 import { Separator } from "../components/ui/separator";
-import { ArrowLeft, Loader2, Send, AlertTriangle, CheckCircle, Lock, LogIn, FileCode, Upload, X, Ban } from "lucide-react";
+import { ArrowLeft, ArrowRight, Loader2, Send, AlertTriangle, CheckCircle, Lock, LogIn, FileCode, Upload, X, Ban } from "lucide-react";
 import { SiDiscord } from "react-icons/si";
 import axios from "axios";
 import { API } from "../lib/api";
@@ -16,6 +16,25 @@ const CODE_FILE_MAX_BYTES = 512 * 1024;
 const CODE_FILE_MAX_FILES = 10;
 const CODE_FILE_MAX_TOTAL_BYTES = 5 * 1024 * 1024;
 const CODE_FILE_ACCEPT = ".lua,.js,.jsx,.ts,.tsx,.py,.java,.cs,.cpp,.c,.h,.hpp,.php,.rb,.go,.rs,.json,.html,.css,.scss,.sql,.txt";
+const DEFAULT_SECTION_TITLE = "Ogolne";
+
+function getSectionTitle(question) {
+  return (question?.section_title || "").trim() || DEFAULT_SECTION_TITLE;
+}
+
+function buildQuestionSections(questions = []) {
+  const sections = [];
+  for (const question of questions) {
+    const title = getSectionTitle(question);
+    const last = sections[sections.length - 1];
+    if (last && last.title === title) {
+      last.questions.push(question);
+    } else {
+      sections.push({ title, questions: [question] });
+    }
+  }
+  return sections;
+}
 
 function inferCodeLanguage(filename = "") {
   const ext = filename.split(".").pop()?.toLowerCase();
@@ -61,6 +80,7 @@ export default function RecruitmentDetailPage() {
   const [errors, setErrors] = useState([]);
   const [submitting, setSubmitting] = useState(false);
   const [submitted, setSubmitted] = useState(false);
+  const [currentSectionIndex, setCurrentSectionIndex] = useState(0);
 
   const fetchRecruitment = useCallback(async () => {
     try {
@@ -76,6 +96,10 @@ export default function RecruitmentDetailPage() {
   useEffect(() => {
     fetchRecruitment();
   }, [fetchRecruitment]);
+
+  useEffect(() => {
+    setCurrentSectionIndex(0);
+  }, [recruitment?.id]);
 
   const updateAnswer = (questionId, value) => {
     setAnswers((prev) => ({ ...prev, [questionId]: value }));
@@ -93,24 +117,44 @@ export default function RecruitmentDetailPage() {
     setErrors([]);
   };
 
-  const validateClient = () => {
-    if (!recruitment) return false;
+  const isQuestionAnswered = (q) => {
+    const val = answers[q.id];
+    if (q.field_type === "multi_choice") {
+      return Array.isArray(val) && val.length > 0;
+    }
+    if (q.field_type === "code") {
+      const files = Array.isArray(val) ? val : val?.content ? [val] : [];
+      return files.length > 0 && files.some(file => file.content?.trim());
+    }
+    return !!val && !!String(val).trim();
+  };
+
+  const getMissingRequiredErrors = (questions) => {
     const errs = [];
-    for (const q of recruitment.questions) {
-      if (q.required) {
-        const val = answers[q.id];
-        if (q.field_type === "multi_choice") {
-          if (!val || val.length === 0) errs.push(`Pole "${q.label}" jest wymagane`);
-        } else if (q.field_type === "code") {
-          const files = Array.isArray(val) ? val : val?.content ? [val] : [];
-          if (files.length === 0 || !files.some(file => file.content?.trim())) errs.push(`Pole "${q.label}" jest wymagane`);
-        } else {
-          if (!val || !String(val).trim()) errs.push(`Pole "${q.label}" jest wymagane`);
-        }
+    for (const q of questions) {
+      if (q.required && !isQuestionAnswered(q)) {
+        errs.push(`Pole "${q.label}" jest wymagane`);
       }
     }
+    return errs;
+  };
+
+  const validateClient = () => {
+    if (!recruitment) return false;
+    const errs = getMissingRequiredErrors(recruitment.questions || []);
     setErrors(errs);
     return errs.length === 0;
+  };
+
+  const validateSection = (section) => {
+    const errs = getMissingRequiredErrors(section?.questions || []);
+    setErrors(errs);
+    return errs.length === 0;
+  };
+
+  const goToNextSection = (section) => {
+    if (!validateSection(section)) return;
+    setCurrentSectionIndex((prev) => Math.min(prev + 1, buildQuestionSections(recruitment?.questions || []).length - 1));
   };
 
   const handleSubmit = async (e) => {
@@ -196,6 +240,9 @@ export default function RecruitmentDetailPage() {
   const canApply = recruitment.user_can_apply === true;
   const existingStatus = recruitment.user_application_status;
   const isBlacklisted = recruitment.user_is_blacklisted === true || recruitment.user_apply_block_reason === "blacklisted";
+  const questionSections = buildQuestionSections(recruitment.questions || []);
+  const currentSection = questionSections[currentSectionIndex] || questionSections[0];
+  const isLastSection = currentSectionIndex >= questionSections.length - 1;
 
   return (
     <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
@@ -324,26 +371,61 @@ export default function RecruitmentDetailPage() {
             </div>
           )}
 
-          {recruitment.questions.map((q) => (
-            <QuestionField
-              key={q.id}
-              question={q}
-              value={answers[q.id]}
-              onChange={(val) => updateAnswer(q.id, val)}
-              onToggle={(opt) => toggleMultiChoice(q.id, opt)}
-            />
-          ))}
+          {currentSection && (
+            <div className="space-y-5" data-testid={`application-section-${currentSectionIndex}`}>
+              <div className="rounded-xl border border-white/5 bg-[#0F0F13] px-5 py-4">
+                <p className="text-xs text-zinc-500" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+                  Sekcja {currentSectionIndex + 1} / {questionSections.length}
+                </p>
+                <h3 className="mt-1 text-lg font-semibold text-zinc-100" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                  {currentSection.title}
+                </h3>
+              </div>
 
-          <div className="pt-4">
+              {currentSection.questions.map((q) => (
+                <QuestionField
+                  key={q.id}
+                  question={q}
+                  value={answers[q.id]}
+                  onChange={(val) => updateAnswer(q.id, val)}
+                  onToggle={(opt) => toggleMultiChoice(q.id, opt)}
+                />
+              ))}
+            </div>
+          )}
+
+          <div className="flex items-center justify-between gap-3 pt-4">
             <button
-              type="submit"
-              disabled={submitting}
-              className="w-full sm:w-auto px-8 py-3 rounded-xl text-sm font-bold tracking-wide bg-[#00E5FF] text-black transition-all duration-200 hover:bg-[#00E5FF]/90 hover:shadow-[0_0_20px_rgba(0,229,255,0.25)] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
-              data-testid="submit-application-button"
+              type="button"
+              onClick={() => setCurrentSectionIndex((prev) => Math.max(prev - 1, 0))}
+              disabled={currentSectionIndex === 0 || submitting}
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/10 px-5 py-3 text-sm font-semibold text-zinc-300 transition-colors hover:border-white/20 hover:text-zinc-100 disabled:cursor-not-allowed disabled:opacity-40"
+              data-testid="prev-section-button"
             >
-              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-              {submitting ? "Wysyłanie..." : "Złóż aplikację"}
+              <ArrowLeft className="w-4 h-4" />Wstecz
             </button>
+
+            {isLastSection ? (
+              <button
+                type="submit"
+                disabled={submitting}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#00E5FF] px-8 py-3 text-sm font-bold tracking-wide text-black transition-all duration-200 hover:bg-[#00E5FF]/90 hover:shadow-[0_0_20px_rgba(0,229,255,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
+                data-testid="submit-application-button"
+              >
+                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                {submitting ? "Wysylanie..." : "Zloz aplikacje"}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => goToNextSection(currentSection)}
+                disabled={submitting}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#00E5FF] px-6 py-3 text-sm font-bold text-black transition-all duration-200 hover:bg-[#00E5FF]/90 disabled:cursor-not-allowed disabled:opacity-50"
+                data-testid="next-section-button"
+              >
+                Dalej<ArrowRight className="w-4 h-4" />
+              </button>
+            )}
           </div>
         </form>
       )}

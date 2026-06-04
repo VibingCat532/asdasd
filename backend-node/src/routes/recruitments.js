@@ -68,7 +68,7 @@ router.get('/:recruitmentId', async (req, res) => {
 
     // Fetch questions
     const questionsResult = await query(
-      `SELECT id, label, field_type, options, required, sort_order
+      `SELECT id, label, field_type, options, required, sort_order, section_title
        FROM recruitment_questions WHERE recruitment_id = $1
        ORDER BY sort_order ASC`,
       [recruitmentId]
@@ -81,6 +81,7 @@ router.get('/:recruitmentId', async (req, res) => {
       options: q.options,
       required: q.required,
       sort_order: q.sort_order,
+      section_title: q.section_title || '',
     }));
 
     // Check user application status if logged in

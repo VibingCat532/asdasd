@@ -116,7 +116,7 @@ async function submitApplication(req, res) {
 
     // Fetch questions for validation
     const questionsResult = await query(
-      `SELECT id, label, field_type, options, required, sort_order
+      `SELECT id, label, field_type, options, required, sort_order, section_title
        FROM recruitment_questions WHERE recruitment_id = $1
        ORDER BY sort_order ASC`,
       [recruitmentId]
@@ -176,6 +176,7 @@ async function submitApplication(req, res) {
       options: q.options,
       required: q.required,
       sort_order: q.sort_order,
+      section_title: q.section_title || '',
     }));
     const recruitmentSnapshot = {
       id: recruitment.id,

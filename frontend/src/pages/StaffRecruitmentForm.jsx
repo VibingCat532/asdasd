@@ -262,7 +262,7 @@ export default function StaffRecruitmentForm() {
     }
 
     if (file.size > VIDEO_MAX_BYTES) {
-      setErrors([`Plik "${file.name}" jest za duży. Maksymalny rozmiar to 10 MB.`]);
+      setErrors([`Plik "${file.name}" jest za duży. Maksymalny rozmiar to 50 MB.`]);
       return;
     }
 
@@ -697,7 +697,7 @@ export default function StaffRecruitmentForm() {
                         <span className="text-sm font-medium text-zinc-300">
                           {q.options?.video?.content ? "Zmień plik MP4" : "Wybierz plik MP4"}
                         </span>
-                        <span className="text-xs text-zinc-600">Maksymalny rozmiar: 10 MB</span>
+                        <span className="text-xs text-zinc-600">Maksymalny rozmiar: 50 MB</span>
                       </label>
                       <input
                         id={`video-upload-${idx}`}

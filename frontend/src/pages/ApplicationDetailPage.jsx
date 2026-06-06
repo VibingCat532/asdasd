@@ -6,6 +6,7 @@ import { Separator } from "../components/ui/separator";
 import { Loader2, ArrowLeft, Clock, FileText, FileCode, Download } from "lucide-react";
 import axios from "axios";
 import { API } from "../lib/api";
+import { parseVideoFromOptions } from "../lib/videoQuestion";
 
 
 const STATUS_CONFIG = {
@@ -147,6 +148,7 @@ export default function ApplicationDetailPage() {
           const ans = answerMap[q.id];
           let displayValue = ans?.answer_value || "";
           const codeFiles = q.field_type === "code" ? parseCodeFiles(displayValue) : [];
+          const questionVideo = q.field_type === "video" ? parseVideoFromOptions(q.options) : null;
           if (q.field_type === "multi_choice" && displayValue) {
             try {
               const parsed = JSON.parse(displayValue);
@@ -188,6 +190,18 @@ export default function ApplicationDetailPage() {
                       </div>
                     </details>
                   ))}
+                </div>
+              ) : questionVideo?.src ? (
+                <div className="space-y-4">
+                  <video
+                    src={questionVideo.src}
+                    controls
+                    className="w-full rounded-lg border border-white/10 bg-black"
+                    data-testid={`answer-video-${q.id}`}
+                  />
+                  <p className="text-sm text-zinc-200 whitespace-pre-wrap" style={{ fontFamily: "'Outfit', sans-serif" }}>
+                    {displayValue || <span className="text-zinc-600 italic">Brak odpowiedzi</span>}
+                  </p>
                 </div>
               ) : (
                 <p className="text-sm text-zinc-200 whitespace-pre-wrap" style={{ fontFamily: "'Outfit', sans-serif" }}>

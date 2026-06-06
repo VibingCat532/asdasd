@@ -39,6 +39,67 @@ function isValidRecruitmentCategory(category) {
   return RECRUITMENT_CATEGORIES.includes(category);
 }
 
+const VIDEO_QUESTION_MAX_BYTES = 10 * 1024 * 1024;
+
+function normalizeVideoOptions(options) {
+  if (!options?.video?.content) {
+    return null;
+  }
+
+  const video = options.video;
+  const rawContent = String(video.content || '');
+  const base64 = rawContent.startsWith('data:') ? rawContent.split(',')[1] || '' : rawContent;
+  if (!base64.trim()) {
+    return null;
+  }
+
+  const size = Number(video.size) || Math.ceil(base64.length * 0.75);
+
+  return {
+    video: {
+      filename: String(video.filename || 'video.mp4').trim().slice(0, 255) || 'video.mp4',
+      size,
+      mime_type: String(video.mime_type || 'video/mp4').trim().slice(0, 64) || 'video/mp4',
+      content: base64,
+    },
+  };
+}
+
+function serializeQuestionOptions(q) {
+  if (q.field_type === 'single_choice' || q.field_type === 'multi_choice') {
+    return q.options ? JSON.stringify(q.options) : null;
+  }
+
+  if (q.field_type === 'video') {
+    const normalized = normalizeVideoOptions(q.options);
+    return normalized ? JSON.stringify(normalized) : null;
+  }
+
+  return q.options ? JSON.stringify(q.options) : null;
+}
+
+function validateQuestionPayload(questions = []) {
+  const errors = [];
+
+  for (const q of questions) {
+    if (q.field_type !== 'video') {
+      continue;
+    }
+
+    const normalized = normalizeVideoOptions(q.options);
+    if (!normalized) {
+      errors.push(`Pytanie "${q.label || 'bez nazwy'}" wymaga pliku MP4`);
+      continue;
+    }
+
+    if (normalized.video.size > VIDEO_QUESTION_MAX_BYTES) {
+      errors.push(`Filmik w polu "${q.label || 'bez nazwy'}" jest za duzy (maks. 10 MB)`);
+    }
+  }
+
+  return errors;
+}
+
 // ────────── Helpers ──────────
 
 function slugify(text) {
@@ -417,6 +478,10 @@ router.post('/recruitments', requireAuth, async (req, res) => {
     }
 
     const slug = slugify(name);
+    const questionErrors = validateQuestionPayload(questions);
+    if (questionErrors.length > 0) {
+      return res.status(422).json({ error: questionErrors[0], errors: questionErrors });
+    }
 
     // Create recruitment
     const recResult = await query(
@@ -440,7 +505,7 @@ router.post('/recruitments', requireAuth, async (req, res) => {
           String(q.section_title || '').trim() || null,
           q.label,
           q.field_type,
-          q.options ? JSON.stringify(q.options) : null,
+          serializeQuestionOptions(q),
           q.required !== false,
         ]
       );
@@ -1297,6 +1362,11 @@ async function updateRecruitmentQuestions(req, res) {
       return res.status(403).json({ error: 'Brak uprawnien do edycji pytan' });
     }
 
+    const questionErrors = validateQuestionPayload(questions);
+    if (questionErrors.length > 0) {
+      return res.status(422).json({ error: questionErrors[0], errors: questionErrors });
+    }
+
     await query('DELETE FROM recruitment_questions WHERE recruitment_id = $1', [recruitmentId]);
 
     for (let i = 0; i < questions.length; i++) {
@@ -1310,7 +1380,7 @@ async function updateRecruitmentQuestions(req, res) {
           String(q.section_title || '').trim() || null,
           q.label,
           q.field_type,
-          q.options ? JSON.stringify(q.options) : null,
+          serializeQuestionOptions(q),
           q.required !== false,
         ]
       );
@@ -1342,6 +1412,11 @@ router.post('/recruitments/:recruitmentId/questions', requireAuth, async (req, r
       return res.status(403).json({ error: 'Brak dostępu do tej rekrutacji' });
     }
 
+    const questionErrors = validateQuestionPayload(questions);
+    if (questionErrors.length > 0) {
+      return res.status(422).json({ error: questionErrors[0], errors: questionErrors });
+    }
+
     // Delete existing questions
     await query('DELETE FROM recruitment_questions WHERE recruitment_id = $1', [recruitmentId]);
 
@@ -1357,7 +1432,7 @@ router.post('/recruitments/:recruitmentId/questions', requireAuth, async (req, r
           String(q.section_title || '').trim() || null,
           q.label,
           q.field_type,
-          q.options ? JSON.stringify(q.options) : null,
+          serializeQuestionOptions(q),
           q.required !== false,
         ]
       );

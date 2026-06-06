@@ -8,6 +8,7 @@ import { Separator } from "../components/ui/separator";
 import { AlertTriangle, ArrowLeft, ChevronDown, Clock, Download, FileCode, History, Loader2, Search, UserRound } from "lucide-react";
 import axios from "axios";
 import { API } from "../lib/api";
+import { parseVideoFromOptions } from "../lib/videoQuestion";
 
 const STATUS_CFG = {
   nowe: { label: "Nowe", cls: "bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30" },
@@ -353,6 +354,7 @@ function HistoryApplication({ application }) {
           <div className="mt-4 space-y-3" data-testid={`history-answers-${application.id}`}>
             {answerRows.map(({ question, answer }) => {
           const codeFiles = question.field_type === "code" ? parseCodeFiles(answer?.answer_value) : [];
+          const questionVideo = question.field_type === "video" ? parseVideoFromOptions(question.options) : null;
           return (
             <div key={question.id} className="rounded-lg border border-white/5 bg-black/20 p-4">
               <p className="text-sm font-medium text-zinc-400 mb-2">{question.label}</p>
@@ -381,6 +383,17 @@ function HistoryApplication({ application }) {
                       </div>
                     </details>
                   ))}
+                </div>
+              ) : questionVideo?.src ? (
+                <div className="space-y-4">
+                  <video
+                    src={questionVideo.src}
+                    controls
+                    className="w-full rounded-lg border border-white/10 bg-black"
+                  />
+                  <p className="text-sm text-zinc-200 whitespace-pre-wrap">
+                    {formatAnswer(question, answer) || <span className="text-zinc-600 italic">Brak odpowiedzi</span>}
+                  </p>
                 </div>
               ) : (
                 <p className="text-sm text-zinc-200 whitespace-pre-wrap">

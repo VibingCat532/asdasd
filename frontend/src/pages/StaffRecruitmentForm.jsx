@@ -9,9 +9,10 @@ import { Separator } from "../components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Loader2, ArrowLeft, Plus, Trash2, GripVertical, Save, Lock, AlertTriangle, UserPlus, X, ChevronUp, ChevronDown, Ban } from "lucide-react";
+import { Loader2, ArrowLeft, Plus, Trash2, GripVertical, Save, Lock, AlertTriangle, UserPlus, X, ChevronUp, ChevronDown, Ban, Upload, Video } from "lucide-react";
 import axios from "axios";
 import { API } from "../lib/api";
+import { VIDEO_MAX_BYTES, formatBytes, parseVideoFromOptions, readVideoFile } from "../lib/videoQuestion";
 
 
 const COLORS = [
@@ -26,6 +27,7 @@ const COLORS = [
 
 const FIELD_TYPES = [
   { value: "short_text", label: "Krótka odpowiedź" },
+  { value: "video", label: "Filmik" },
   { value: "long_text", label: "Długa odpowiedź" },
   { value: "single_choice", label: "Jednokrotny wybór" },
   { value: "multi_choice", label: "Wielokrotny wybór" },
@@ -243,6 +245,52 @@ export default function StaffRecruitmentForm() {
     }));
   };
 
+  const updateQuestionOptions = (idx, options) => {
+    setQuestions((prev) => prev.map((question, questionIdx) => (
+      questionIdx === idx ? { ...question, options } : question
+    )));
+  };
+
+  const handleVideoUpload = async (idx, event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    if (!file.type.includes("mp4") && !file.name.toLowerCase().endsWith(".mp4")) {
+      setErrors(["Dozwolony jest tylko format MP4"]);
+      return;
+    }
+
+    if (file.size > VIDEO_MAX_BYTES) {
+      setErrors([`Plik "${file.name}" jest za duży. Maksymalny rozmiar to 10 MB.`]);
+      return;
+    }
+
+    try {
+      const video = await readVideoFile(file);
+      updateQuestionOptions(idx, { video });
+      setErrors([]);
+    } catch {
+      setErrors(["Nie udało się odczytać pliku wideo"]);
+    }
+  };
+
+  const removeVideo = (idx) => {
+    updateQuestionOptions(idx, { video: null });
+  };
+
+  const buildQuestionOptions = (question) => {
+    if (question.field_type === "single_choice" || question.field_type === "multi_choice") {
+      return (question.options || []).filter((option) => option.trim());
+    }
+
+    if (question.field_type === "video") {
+      return question.options?.video?.content ? { video: question.options.video } : null;
+    }
+
+    return null;
+  };
+
   // Access
   const getPendingAccess = (userId) => pendingAccess[userId] || DEFAULT_ACCESS;
 
@@ -348,15 +396,22 @@ export default function StaffRecruitmentForm() {
       return questions.indexOf(a) - questions.indexOf(b);
     });
 
+    const missingVideo = orderedQuestions.find(
+      (question) => question.field_type === "video" && !question.options?.video?.content
+    );
+    if (missingVideo) {
+      setErrors([`Pytanie "${missingVideo.label || "bez nazwy"}" wymaga pliku MP4`]);
+      setSaving(false);
+      return;
+    }
+
     try {
       const qPayload = orderedQuestions.map((q, i) => ({
         section_title: sectionTitleByKey[q.section_key] || sections[0]?.title || DEFAULT_SECTION_TITLE,
         label: q.label,
         field_type: q.field_type,
         required: q.required,
-        options: (q.field_type === "single_choice" || q.field_type === "multi_choice")
-          ? (q.options || []).filter((option) => option.trim())
-          : null,
+        options: buildQuestionOptions(q),
         sort_order: i,
       }));
 
@@ -592,12 +647,20 @@ export default function StaffRecruitmentForm() {
                   </div>
                   <div className="flex items-center gap-3 flex-wrap">
                     <Select value={q.field_type} onValueChange={v => {
-                      updateQuestion(idx, "field_type", v);
-                      if (v === "single_choice" || v === "multi_choice") {
-                        if (!q.options || q.options.length === 0) updateQuestion(idx, "options", [""]);
-                      } else {
-                        updateQuestion(idx, "options", null);
-                      }
+                      setQuestions((prev) => prev.map((question, questionIdx) => {
+                        if (questionIdx !== idx) return question;
+
+                        let nextOptions = null;
+                        if (v === "single_choice" || v === "multi_choice") {
+                          nextOptions = Array.isArray(question.options) && question.options.length > 0
+                            ? question.options
+                            : [""];
+                        } else if (v === "video") {
+                          nextOptions = question.options?.video ? question.options : { video: null };
+                        }
+
+                        return { ...question, field_type: v, options: nextOptions };
+                      }));
                     }}>
                       <SelectTrigger className="w-[180px] bg-black/40 border-white/10 text-zinc-300 text-xs" data-testid={`q-type-${idx}`}><SelectValue /></SelectTrigger>
                       <SelectContent>
@@ -622,6 +685,53 @@ export default function StaffRecruitmentForm() {
                       <button onClick={() => addOption(idx)} className="text-xs text-[#00E5FF] hover:underline flex items-center gap-1">
                         <Plus className="w-3 h-3" />Dodaj opcję
                       </button>
+                    </div>
+                  )}
+                  {q.field_type === "video" && (
+                    <div className="space-y-3 pl-2 border-l-2 border-white/5">
+                      <label
+                        htmlFor={`video-upload-${idx}`}
+                        className="flex min-h-[92px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-white/10 bg-black/30 px-4 py-5 text-center transition-colors hover:border-[#00E5FF]/40"
+                      >
+                        <Upload className="w-5 h-5 text-[#00E5FF]" />
+                        <span className="text-sm font-medium text-zinc-300">
+                          {q.options?.video?.content ? "Zmień plik MP4" : "Wybierz plik MP4"}
+                        </span>
+                        <span className="text-xs text-zinc-600">Maksymalny rozmiar: 10 MB</span>
+                      </label>
+                      <input
+                        id={`video-upload-${idx}`}
+                        type="file"
+                        accept="video/mp4,.mp4"
+                        onChange={(event) => handleVideoUpload(idx, event)}
+                        className="hidden"
+                        data-testid={`q-video-upload-${idx}`}
+                      />
+                      {q.options?.video?.content && (
+                        <div className="space-y-3 rounded-lg border border-white/5 bg-black/20 p-3">
+                          <div className="flex items-center gap-3">
+                            <Video className="w-4 h-4 text-[#00E5FF] shrink-0" />
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate text-sm text-zinc-200">{q.options.video.filename}</p>
+                              <p className="text-xs text-zinc-600">{formatBytes(q.options.video.size || 0)}</p>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => removeVideo(idx)}
+                              className="p-1.5 text-zinc-500 hover:text-red-400"
+                              title="Usuń filmik"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                          </div>
+                          <video
+                            src={parseVideoFromOptions(q.options)?.src}
+                            controls
+                            className="w-full rounded-lg border border-white/10 bg-black"
+                            data-testid={`q-video-preview-${idx}`}
+                          />
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

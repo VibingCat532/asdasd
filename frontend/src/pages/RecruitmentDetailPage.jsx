@@ -11,6 +11,7 @@ import { ArrowLeft, ArrowRight, Loader2, Send, AlertTriangle, CheckCircle, Lock,
 import { SiDiscord } from "react-icons/si";
 import axios from "axios";
 import { API } from "../lib/api";
+import { parseVideoFromOptions } from "../lib/videoQuestion";
 
 const CODE_FILE_MAX_BYTES = 512 * 1024;
 const CODE_FILE_MAX_FILES = 10;
@@ -460,6 +461,7 @@ function QuestionField({ question, value, onChange, onToggle }) {
   const id = `q-${q.id}`;
   const [fileError, setFileError] = useState(null);
   const codeFiles = Array.isArray(value) ? value : value?.content ? [value] : [];
+  const questionVideo = q.field_type === "video" ? parseVideoFromOptions(q.options) : null;
 
   const handleCodeFile = async (event) => {
     const files = Array.from(event.target.files || []);
@@ -583,6 +585,39 @@ function QuestionField({ question, value, onChange, onToggle }) {
               </Label>
             </div>
           ))}
+        </div>
+      )}
+
+      {q.field_type === "video" && (
+        <div className="space-y-4">
+          {questionVideo?.src ? (
+            <video
+              src={questionVideo.src}
+              controls
+              className="w-full rounded-lg border border-white/10 bg-black"
+              data-testid={`video-player-${q.id}`}
+            />
+          ) : (
+            <p className="text-sm text-zinc-500">Filmik nie jest dostępny.</p>
+          )}
+          <div>
+            <Label
+              htmlFor={`${id}-answer`}
+              className="text-xs text-zinc-500 mb-2 block"
+              style={{ fontFamily: "'Outfit', sans-serif" }}
+            >
+              Twoja odpowiedź na filmik
+            </Label>
+            <textarea
+              id={`${id}-answer`}
+              value={value || ""}
+              onChange={(e) => onChange(e.target.value)}
+              placeholder="Opisz swoją odpowiedź po obejrzeniu filmiku..."
+              rows={6}
+              className="flex w-full rounded-md border bg-black/40 border-white/10 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-[#00E5FF] focus:ring-1 focus:ring-[#00E5FF] focus:outline-none transition-colors resize-y min-h-[140px]"
+              data-testid={`video-answer-${q.id}`}
+            />
+          </div>
         </div>
       )}
 

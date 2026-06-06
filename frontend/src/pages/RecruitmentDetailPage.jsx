@@ -158,19 +158,7 @@ export default function RecruitmentDetailPage() {
     setCurrentSectionIndex((prev) => Math.min(prev + 1, lastSectionIndex));
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    const sections = buildQuestionSections(recruitment?.questions || []);
-    const activeSection = sections[currentSectionIndex] || sections[0];
-    const lastSectionIndex = Math.max(sections.length - 1, 0);
-
-    if (currentSectionIndex < lastSectionIndex) {
-      if (validateSection(activeSection)) {
-        setCurrentSectionIndex((prev) => Math.min(prev + 1, lastSectionIndex));
-      }
-      return;
-    }
-
+  const submitApplication = async () => {
     if (!validateClient()) return;
     setSubmitting(true);
     try {
@@ -193,6 +181,23 @@ export default function RecruitmentDetailPage() {
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handlePrimaryAction = () => {
+    const sections = buildQuestionSections(recruitment?.questions || []);
+    const activeSection = sections[currentSectionIndex] || sections[0];
+    const onLastSection = currentSectionIndex >= sections.length - 1;
+
+    if (onLastSection) {
+      submitApplication();
+      return;
+    }
+    goToNextSection(activeSection);
+  };
+
+  const handleFormSubmit = (e) => {
+    e.preventDefault();
+    handlePrimaryAction();
   };
 
   if (loading) {
@@ -362,7 +367,7 @@ export default function RecruitmentDetailPage() {
 
       {/* Application Form */}
       {!isClosed && user && canApply && (
-        <form onSubmit={handleSubmit} className="space-y-6 hs-animate-fade-up" data-testid="application-form">
+        <form onSubmit={handleFormSubmit} className="space-y-6 hs-animate-fade-up" data-testid="application-form">
           <div className="flex items-center gap-2 mb-2">
             <Send className="w-4 h-4 text-[#00E5FF]" />
             <h2 className="text-lg font-semibold" style={{ fontFamily: "'Outfit', sans-serif", color: "#FAFAFA" }}>
@@ -417,27 +422,30 @@ export default function RecruitmentDetailPage() {
               <ArrowLeft className="w-4 h-4" />Wstecz
             </button>
 
-            {isLastSection ? (
-              <button
-                type="submit"
-                disabled={submitting}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#00E5FF] px-8 py-3 text-sm font-bold tracking-wide text-black transition-all duration-200 hover:bg-[#00E5FF]/90 hover:shadow-[0_0_20px_rgba(0,229,255,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
-                data-testid="submit-application-button"
-              >
-                {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                {submitting ? "Wysylanie..." : "Zloz aplikacje"}
-              </button>
-            ) : (
-              <button
-                type="button"
-                onClick={() => goToNextSection(currentSection)}
-                disabled={submitting}
-                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#00E5FF] px-6 py-3 text-sm font-bold text-black transition-all duration-200 hover:bg-[#00E5FF]/90 disabled:cursor-not-allowed disabled:opacity-50"
-                data-testid="next-section-button"
-              >
-                Dalej<ArrowRight className="w-4 h-4" />
-              </button>
-            )}
+            <button
+              type="button"
+              onClick={handlePrimaryAction}
+              disabled={submitting}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#00E5FF] px-8 py-3 text-sm font-bold tracking-wide text-black transition-all duration-200 hover:bg-[#00E5FF]/90 hover:shadow-[0_0_20px_rgba(0,229,255,0.25)] disabled:cursor-not-allowed disabled:opacity-50"
+              data-testid={isLastSection ? "submit-application-button" : "next-section-button"}
+            >
+              {submitting ? (
+                <>
+                  <Loader2 className="w-4 h-4 animate-spin" />
+                  Wysylanie...
+                </>
+              ) : isLastSection ? (
+                <>
+                  <Send className="w-4 h-4" />
+                  Zloz aplikacje
+                </>
+              ) : (
+                <>
+                  Dalej
+                  <ArrowRight className="w-4 h-4" />
+                </>
+              )}
+            </button>
           </div>
         </form>
       )}

@@ -22,9 +22,10 @@ let initPromise = null;
 
 // ────────── Middleware ──────────
 
-// Body parsing
-app.use(express.json({ limit: '50mb' }));
-app.use(express.urlencoded({ extended: true }));
+// Body parsing. Video files are sent as base64 JSON, so the transport limit
+// needs headroom above the actual 50 MB MP4 validation limit.
+app.use(express.json({ limit: '75mb' }));
+app.use(express.urlencoded({ extended: true, limit: '75mb' }));
 app.use(cookieParser());
 
 // CORS

@@ -39,6 +39,35 @@ const CATEGORIES = [
 ];
 
 const DEFAULT_ACCESS = { can_edit_questions: false, can_review_applications: true };
+const DEFAULT_SECTION_TITLE = "Ogólne";
+
+function normalizeSectionTitle(title) {
+  return (title || "").trim() || DEFAULT_SECTION_TITLE;
+}
+
+function buildSectionsFromQuestions(questions = []) {
+  const sections = [];
+  const titleToKey = new Map();
+
+  for (const question of questions) {
+    const title = normalizeSectionTitle(question.section_title);
+    if (!titleToKey.has(title)) {
+      const section = { _key: crypto.randomUUID(), title };
+      titleToKey.set(title, section._key);
+      sections.push(section);
+    }
+  }
+
+  return { sections, titleToKey };
+}
+
+function attachSectionKeys(questions = [], titleToKey = new Map()) {
+  return questions.map((question) => ({
+    ...question,
+    section_key: titleToKey.get(normalizeSectionTitle(question.section_title)) || null,
+  }));
+}
+
 export default function StaffRecruitmentForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -46,6 +75,7 @@ export default function StaffRecruitmentForm() {
   const isEdit = !!id;
 
   const [form, setForm] = useState({ name: "", description: "", status: "active", theme_color: "#00E5FF", category: "general", scope: "", accepted_discord_role_id: "" });
+  const [sections, setSections] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [accessUsers, setAccessUsers] = useState([]);
   const [blacklistUsers, setBlacklistUsers] = useState([]);
@@ -70,7 +100,10 @@ export default function StaffRecruitmentForm() {
       const res = await axios.get(`${API}/staff/recruitments/${id}`, { withCredentials: true });
       const d = res.data;
       setForm({ name: d.name, description: d.description, status: d.status === "closed" ? "inactive" : d.status, theme_color: d.theme_color, category: d.category || "general", scope: d.scope || "", accepted_discord_role_id: d.accepted_discord_role_id || "" });
-      setQuestions(d.questions.map(q => ({ ...q, _key: q.id || crypto.randomUUID() })));
+      const loadedQuestions = d.questions.map((q) => ({ ...q, _key: q.id || crypto.randomUUID() }));
+      const { sections: loadedSections, titleToKey } = buildSectionsFromQuestions(loadedQuestions);
+      setSections(loadedSections);
+      setQuestions(attachSectionKeys(loadedQuestions, titleToKey));
       setPermLevel(d.permission_level);
       setPermissions({
         canEditRecruitment: !!d.can_edit_recruitment,
@@ -123,16 +156,61 @@ export default function StaffRecruitmentForm() {
   const updateForm = (field, value) => setForm(prev => ({ ...prev, [field]: value }));
   const getApiError = (err, fallback) => err.response?.data?.error || err.response?.data?.detail || fallback;
 
-  // Questions
-  const addQuestion = (sectionTitle) => {
-    setQuestions(prev => {
-      const section_title = sectionTitle !== undefined ? sectionTitle : (prev[prev.length - 1]?.section_title || "");
-      return [...prev, { _key: crypto.randomUUID(), section_title, label: "", field_type: "short_text", required: true, options: null, sort_order: prev.length }];
+  const getDefaultSectionKey = () => sections[0]?._key || null;
+
+  const addSection = () => {
+    setSections((prev) => {
+      const nextIndex = prev.length + 1;
+      return [...prev, { _key: crypto.randomUUID(), title: nextIndex === 1 ? "Sekcja OOC" : `Sekcja ${nextIndex}` }];
     });
   };
-  const addSection = () => {
-    const existingCount = new Set(questions.map(q => (q.section_title || "").trim()).filter(Boolean)).size;
-    addQuestion(existingCount === 0 ? "Sekcja OOC" : `Sekcja ${existingCount + 1}`);
+
+  const updateSection = (sectionKey, title) => {
+    setSections((prev) => prev.map((section) => (
+      section._key === sectionKey ? { ...section, title } : section
+    )));
+  };
+
+  const removeSection = (sectionKey) => {
+    const fallbackKey = sections.find((section) => section._key !== sectionKey)?._key;
+    if (!fallbackKey) return;
+
+    setSections((prev) => prev.filter((section) => section._key !== sectionKey));
+    setQuestions((prev) => prev.map((question) => (
+      question.section_key === sectionKey ? { ...question, section_key: fallbackKey } : question
+    )));
+  };
+
+  const moveSection = (sectionKey, direction) => {
+    setSections((prev) => {
+      const index = prev.findIndex((section) => section._key === sectionKey);
+      const target = index + direction;
+      if (index < 0 || target < 0 || target >= prev.length) return prev;
+      const next = [...prev];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  const addQuestion = () => {
+    const sectionKey = getDefaultSectionKey();
+    if (!sectionKey) {
+      setErrors(["Najpierw dodaj sekcję"]);
+      return;
+    }
+
+    setQuestions((prev) => [
+      ...prev,
+      {
+        _key: crypto.randomUUID(),
+        section_key: sectionKey,
+        label: "",
+        field_type: "short_text",
+        required: true,
+        options: null,
+        sort_order: prev.length,
+      },
+    ]);
   };
   const updateQuestion = (idx, field, value) => {
     setQuestions(prev => prev.map((q, i) => i === idx ? { ...q, [field]: value } : q));
@@ -251,11 +329,34 @@ export default function StaffRecruitmentForm() {
   const handleSave = async () => {
     setSaving(true);
     setErrors([]);
+
+    if (questions.length > 0 && sections.length === 0) {
+      setErrors(["Dodaj co najmniej jedną sekcję"]);
+      setSaving(false);
+      return;
+    }
+
+    const sectionTitleByKey = Object.fromEntries(
+      sections.map((section) => [section._key, normalizeSectionTitle(section.title)])
+    );
+    const sectionOrder = Object.fromEntries(
+      sections.map((section, index) => [section._key, index])
+    );
+    const orderedQuestions = [...questions].sort((a, b) => {
+      const sectionDiff = (sectionOrder[a.section_key] ?? 0) - (sectionOrder[b.section_key] ?? 0);
+      if (sectionDiff !== 0) return sectionDiff;
+      return questions.indexOf(a) - questions.indexOf(b);
+    });
+
     try {
-      const qPayload = questions.map((q, i) => ({
-        section_title: (q.section_title || "").trim(),
-        label: q.label, field_type: q.field_type, required: q.required,
-        options: (q.field_type === "single_choice" || q.field_type === "multi_choice") ? (q.options || []).filter(o => o.trim()) : null,
+      const qPayload = orderedQuestions.map((q, i) => ({
+        section_title: sectionTitleByKey[q.section_key] || sections[0]?.title || DEFAULT_SECTION_TITLE,
+        label: q.label,
+        field_type: q.field_type,
+        required: q.required,
+        options: (q.field_type === "single_choice" || q.field_type === "multi_choice")
+          ? (q.options || []).filter((option) => option.trim())
+          : null,
         sort_order: i,
       }));
 
@@ -388,6 +489,73 @@ export default function StaffRecruitmentForm() {
 
         {/* Questions Tab */}
         {showQuestionsTab && <TabsContent value="questions" className="space-y-4">
+          <div className="rounded-xl bg-[#0F0F13] border border-white/5 p-4 space-y-3" data-testid="sections-editor">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="text-sm font-semibold text-zinc-200">Sekcje formularza</h3>
+                <p className="text-xs text-zinc-500 mt-1">Najpierw utwórz sekcje, a potem przypisz do nich pytania.</p>
+              </div>
+              <button
+                type="button"
+                onClick={addSection}
+                className="inline-flex items-center gap-1.5 rounded-lg border border-[#00E5FF]/20 px-3 py-2 text-xs font-medium text-[#00E5FF] hover:bg-[#00E5FF]/5 transition-colors"
+                data-testid="add-section-button"
+              >
+                <Plus className="w-3.5 h-3.5" />Dodaj sekcję
+              </button>
+            </div>
+
+            {sections.length === 0 ? (
+              <p className="text-sm text-zinc-500">Brak sekcji. Dodaj pierwszą sekcję, aby móc tworzyć pytania.</p>
+            ) : (
+              <div className="space-y-2">
+                {sections.map((section, sectionIdx) => (
+                  <div
+                    key={section._key}
+                    className="flex items-center gap-2 rounded-lg border border-white/5 bg-black/20 px-3 py-2"
+                    data-testid={`section-editor-${sectionIdx}`}
+                  >
+                    <div className="flex flex-col gap-0.5">
+                      <button
+                        type="button"
+                        onClick={() => moveSection(section._key, -1)}
+                        className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"
+                        disabled={sectionIdx === 0}
+                      >
+                        <ChevronUp className="w-3.5 h-3.5" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => moveSection(section._key, 1)}
+                        className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"
+                        disabled={sectionIdx === sections.length - 1}
+                      >
+                        <ChevronDown className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                    <Input
+                      value={section.title}
+                      onChange={(e) => updateSection(section._key, e.target.value)}
+                      placeholder="np. Sekcja OOC"
+                      className="bg-black/40 border-white/10 text-zinc-100 text-sm"
+                      data-testid={`section-title-${sectionIdx}`}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => removeSection(section._key)}
+                      className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-30"
+                      disabled={sections.length === 1}
+                      data-testid={`section-delete-${sectionIdx}`}
+                      title={sections.length === 1 ? "Musi pozostać co najmniej jedna sekcja" : "Usuń sekcję"}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {questions.map((q, idx) => (
             <div key={q._key || q.id} className="rounded-xl bg-[#0F0F13] border border-white/5 p-4 space-y-3" data-testid={`question-editor-${idx}`}>
               <div className="flex items-start gap-2">
@@ -399,8 +567,22 @@ export default function StaffRecruitmentForm() {
                   <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
                     <div>
                       <Label className="text-xs text-zinc-500 mb-1.5 block">Sekcja</Label>
-                      <Input value={q.section_title || ""} onChange={e => updateQuestion(idx, "section_title", e.target.value)} placeholder="np. Sekcja OOC"
-                        className="bg-black/40 border-white/10 text-zinc-100 text-xs" data-testid={`q-section-${idx}`} />
+                      <Select
+                        value={q.section_key || getDefaultSectionKey() || ""}
+                        onValueChange={(value) => updateQuestion(idx, "section_key", value)}
+                        disabled={sections.length === 0}
+                      >
+                        <SelectTrigger className="bg-black/40 border-white/10 text-zinc-100 text-xs" data-testid={`q-section-${idx}`}>
+                          <SelectValue placeholder="Wybierz sekcję" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {sections.map((section) => (
+                            <SelectItem key={section._key} value={section._key}>
+                              {section.title || "Bez nazwy"}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                     <div>
                       <Label className="text-xs text-zinc-500 mb-1.5 block">Pytanie</Label>
@@ -449,15 +631,14 @@ export default function StaffRecruitmentForm() {
               </div>
             </div>
           ))}
-          <button onClick={() => addQuestion()}
-            className="w-full py-3 rounded-xl border border-dashed border-white/10 text-sm text-zinc-500 hover:text-[#00E5FF] hover:border-[#00E5FF]/30 transition-colors flex items-center justify-center gap-2"
-            data-testid="add-question-button">
+          <button
+            type="button"
+            onClick={addQuestion}
+            disabled={sections.length === 0}
+            className="w-full py-3 rounded-xl border border-dashed border-white/10 text-sm text-zinc-500 hover:text-[#00E5FF] hover:border-[#00E5FF]/30 transition-colors flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-40"
+            data-testid="add-question-button"
+          >
             <Plus className="w-4 h-4" />Dodaj pytanie
-          </button>
-          <button onClick={addSection}
-            className="w-full py-3 rounded-xl border border-dashed border-[#00E5FF]/20 text-sm text-[#00E5FF] hover:bg-[#00E5FF]/5 transition-colors flex items-center justify-center gap-2"
-            data-testid="add-section-button">
-            <Plus className="w-4 h-4" />Dodaj sekcje
           </button>
         </TabsContent>}
 

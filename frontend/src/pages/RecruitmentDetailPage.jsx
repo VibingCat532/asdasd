@@ -23,17 +23,19 @@ function getSectionTitle(question) {
 }
 
 function buildQuestionSections(questions = []) {
-  const sections = [];
+  const orderedTitles = [];
+  const sectionMap = new Map();
+
   for (const question of questions) {
     const title = getSectionTitle(question);
-    const last = sections[sections.length - 1];
-    if (last && last.title === title) {
-      last.questions.push(question);
-    } else {
-      sections.push({ title, questions: [question] });
+    if (!sectionMap.has(title)) {
+      sectionMap.set(title, { title, questions: [] });
+      orderedTitles.push(title);
     }
+    sectionMap.get(title).questions.push(question);
   }
-  return sections;
+
+  return orderedTitles.map((title) => sectionMap.get(title));
 }
 
 function inferCodeLanguage(filename = "") {

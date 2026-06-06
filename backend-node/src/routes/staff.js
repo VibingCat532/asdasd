@@ -39,7 +39,7 @@ function isValidRecruitmentCategory(category) {
   return RECRUITMENT_CATEGORIES.includes(category);
 }
 
-const VIDEO_QUESTION_MAX_BYTES = 10 * 1024 * 1024;
+const VIDEO_QUESTION_MAX_BYTES = 50 * 1024 * 1024;
 
 function normalizeVideoOptions(options) {
   if (!options?.video?.content) {
@@ -93,7 +93,7 @@ function validateQuestionPayload(questions = []) {
     }
 
     if (normalized.video.size > VIDEO_QUESTION_MAX_BYTES) {
-      errors.push(`Filmik w polu "${q.label || 'bez nazwy'}" jest za duzy (maks. 10 MB)`);
+      errors.push(`Filmik w polu "${q.label || 'bez nazwy'}" jest za duzy (maks. 50 MB)`);
     }
   }
 

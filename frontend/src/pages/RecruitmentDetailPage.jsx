@@ -12,6 +12,7 @@ import { SiDiscord } from "react-icons/si";
 import axios from "axios";
 import { API } from "../lib/api";
 import { parseVideoFromOptions } from "../lib/videoQuestion";
+import VideoPlayer from "../components/VideoPlayer";
 
 const CODE_FILE_MAX_BYTES = 512 * 1024;
 const CODE_FILE_MAX_FILES = 10;
@@ -591,12 +592,7 @@ function QuestionField({ question, value, onChange, onToggle }) {
       {q.field_type === "video" && (
         <div className="space-y-4">
           {questionVideo?.src ? (
-            <video
-              src={questionVideo.src}
-              controls
-              className="w-full rounded-lg border border-white/10 bg-black"
-              data-testid={`video-player-${q.id}`}
-            />
+            <VideoPlayer video={questionVideo} testId={`video-player-${q.id}`} />
           ) : (
             <p className="text-sm text-zinc-500">Filmik nie jest dostępny.</p>
           )}

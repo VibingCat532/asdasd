@@ -1,8 +1,22 @@
-export const VIDEO_MAX_BYTES = 50 * 1024 * 1024;
-
 export function parseVideoFromOptions(options) {
   const video = options?.video;
-  if (!video?.content) {
+  if (!video) {
+    return null;
+  }
+
+  const url = String(video.url || "").trim();
+  if (url) {
+    const youtubeEmbedSrc = getYouTubeEmbedSrc(url);
+    return {
+      ...video,
+      url,
+      src: youtubeEmbedSrc || url,
+      embedSrc: youtubeEmbedSrc,
+      sourceType: youtubeEmbedSrc ? "embed" : "video",
+    };
+  }
+
+  if (!video.content) {
     return null;
   }
 
@@ -11,25 +25,33 @@ export function parseVideoFromOptions(options) {
     ? video.content
     : `data:${mime};base64,${video.content}`;
 
-  return { ...video, src };
+  return { ...video, src, sourceType: "video" };
 }
 
-export function readVideoFile(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => {
-      const result = String(reader.result || "");
-      const base64 = result.includes(",") ? result.split(",")[1] : result;
-      resolve({
-        filename: file.name,
-        size: file.size,
-        mime_type: file.type || "video/mp4",
-        content: base64,
-      });
-    };
-    reader.onerror = () => reject(new Error("read_failed"));
-    reader.readAsDataURL(file);
-  });
+export function getYouTubeEmbedSrc(value) {
+  try {
+    const url = new URL(value);
+    const hostname = url.hostname.replace(/^www\./, "");
+
+    if (hostname === "youtu.be") {
+      const id = url.pathname.split("/").filter(Boolean)[0];
+      return id ? `https://www.youtube.com/embed/${id}` : "";
+    }
+
+    if (hostname === "youtube.com" || hostname === "m.youtube.com") {
+      const watchId = url.searchParams.get("v");
+      if (watchId) return `https://www.youtube.com/embed/${watchId}`;
+
+      const parts = url.pathname.split("/").filter(Boolean);
+      if ((parts[0] === "shorts" || parts[0] === "embed") && parts[1]) {
+        return `https://www.youtube.com/embed/${parts[1]}`;
+      }
+    }
+  } catch {
+    return "";
+  }
+
+  return "";
 }
 
 export function formatBytes(bytes = 0) {

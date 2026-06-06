@@ -42,11 +42,29 @@ function isValidRecruitmentCategory(category) {
 const VIDEO_QUESTION_MAX_BYTES = 50 * 1024 * 1024;
 
 function normalizeVideoOptions(options) {
-  if (!options?.video?.content) {
+  if (!options?.video) {
     return null;
   }
 
   const video = options.video;
+  const url = String(video.url || '').trim();
+  if (url) {
+    try {
+      const parsedUrl = new URL(url);
+      if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+        return null;
+      }
+    } catch {
+      return null;
+    }
+
+    return {
+      video: {
+        url: url.slice(0, 2048),
+      },
+    };
+  }
+
   const rawContent = String(video.content || '');
   const base64 = rawContent.startsWith('data:') ? rawContent.split(',')[1] || '' : rawContent;
   if (!base64.trim()) {
@@ -88,11 +106,11 @@ function validateQuestionPayload(questions = []) {
 
     const normalized = normalizeVideoOptions(q.options);
     if (!normalized) {
-      errors.push(`Pytanie "${q.label || 'bez nazwy'}" wymaga pliku MP4`);
+      errors.push(`Pytanie "${q.label || 'bez nazwy'}" wymaga linku do filmiku`);
       continue;
     }
 
-    if (normalized.video.size > VIDEO_QUESTION_MAX_BYTES) {
+    if (normalized.video.content && normalized.video.size > VIDEO_QUESTION_MAX_BYTES) {
       errors.push(`Filmik w polu "${q.label || 'bez nazwy'}" jest za duzy (maks. 50 MB)`);
     }
   }

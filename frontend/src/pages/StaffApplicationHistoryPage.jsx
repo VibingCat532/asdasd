@@ -9,6 +9,7 @@ import { AlertTriangle, ArrowLeft, ChevronDown, Clock, Download, FileCode, Histo
 import axios from "axios";
 import { API } from "../lib/api";
 import { parseVideoFromOptions } from "../lib/videoQuestion";
+import VideoPlayer from "../components/VideoPlayer";
 
 const STATUS_CFG = {
   nowe: { label: "Nowe", cls: "bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30" },
@@ -386,11 +387,7 @@ function HistoryApplication({ application }) {
                 </div>
               ) : questionVideo?.src ? (
                 <div className="space-y-4">
-                  <video
-                    src={questionVideo.src}
-                    controls
-                    className="w-full rounded-lg border border-white/10 bg-black"
-                  />
+                  <VideoPlayer video={questionVideo} />
                   <p className="text-sm text-zinc-200 whitespace-pre-wrap">
                     {formatAnswer(question, answer) || <span className="text-zinc-600 italic">Brak odpowiedzi</span>}
                   </p>

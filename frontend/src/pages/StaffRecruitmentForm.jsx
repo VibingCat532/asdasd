@@ -9,10 +9,11 @@ import { Separator } from "../components/ui/separator";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
-import { Loader2, ArrowLeft, Plus, Trash2, GripVertical, Save, Lock, AlertTriangle, UserPlus, X, ChevronUp, ChevronDown, Ban, Upload, Video } from "lucide-react";
+import { Loader2, ArrowLeft, Plus, Trash2, GripVertical, Save, Lock, AlertTriangle, UserPlus, X, ChevronUp, ChevronDown, Ban, Link as LinkIcon, Video } from "lucide-react";
 import axios from "axios";
 import { API } from "../lib/api";
-import { VIDEO_MAX_BYTES, formatBytes, parseVideoFromOptions, readVideoFile } from "../lib/videoQuestion";
+import { parseVideoFromOptions } from "../lib/videoQuestion";
+import VideoPlayer from "../components/VideoPlayer";
 
 
 const COLORS = [
@@ -251,28 +252,17 @@ export default function StaffRecruitmentForm() {
     )));
   };
 
-  const handleVideoUpload = async (idx, event) => {
-    const file = event.target.files?.[0];
-    event.target.value = "";
-    if (!file) return;
-
-    if (!file.type.includes("mp4") && !file.name.toLowerCase().endsWith(".mp4")) {
-      setErrors(["Dozwolony jest tylko format MP4"]);
-      return;
-    }
-
-    if (file.size > VIDEO_MAX_BYTES) {
-      setErrors([`Plik "${file.name}" jest za duży. Maksymalny rozmiar to 50 MB.`]);
-      return;
-    }
-
-    try {
-      const video = await readVideoFile(file);
-      updateQuestionOptions(idx, { video });
-      setErrors([]);
-    } catch {
-      setErrors(["Nie udało się odczytać pliku wideo"]);
-    }
+  const handleVideoUrlChange = (idx, value) => {
+    updateQuestionOptions(idx, {
+      video: {
+        ...(questions[idx]?.options?.video || {}),
+        url: value,
+        content: undefined,
+        filename: undefined,
+        size: undefined,
+        mime_type: undefined,
+      },
+    });
   };
 
   const removeVideo = (idx) => {
@@ -285,7 +275,11 @@ export default function StaffRecruitmentForm() {
     }
 
     if (question.field_type === "video") {
-      return question.options?.video?.content ? { video: question.options.video } : null;
+      const video = question.options?.video;
+      if (video?.url?.trim()) {
+        return { video: { url: video.url.trim() } };
+      }
+      return video?.content ? { video } : null;
     }
 
     return null;
@@ -397,10 +391,10 @@ export default function StaffRecruitmentForm() {
     });
 
     const missingVideo = orderedQuestions.find(
-      (question) => question.field_type === "video" && !question.options?.video?.content
+      (question) => question.field_type === "video" && !question.options?.video?.url?.trim() && !question.options?.video?.content
     );
     if (missingVideo) {
-      setErrors([`Pytanie "${missingVideo.label || "bez nazwy"}" wymaga pliku MP4`]);
+      setErrors([`Pytanie "${missingVideo.label || "bez nazwy"}" wymaga linku do filmiku`]);
       setSaving(false);
       return;
     }
@@ -689,31 +683,26 @@ export default function StaffRecruitmentForm() {
                   )}
                   {q.field_type === "video" && (
                     <div className="space-y-3 pl-2 border-l-2 border-white/5">
-                      <label
-                        htmlFor={`video-upload-${idx}`}
-                        className="flex min-h-[92px] cursor-pointer flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-white/10 bg-black/30 px-4 py-5 text-center transition-colors hover:border-[#00E5FF]/40"
-                      >
-                        <Upload className="w-5 h-5 text-[#00E5FF]" />
-                        <span className="text-sm font-medium text-zinc-300">
-                          {q.options?.video?.content ? "Zmień plik MP4" : "Wybierz plik MP4"}
-                        </span>
-                        <span className="text-xs text-zinc-600">Maksymalny rozmiar: 50 MB</span>
-                      </label>
-                      <input
-                        id={`video-upload-${idx}`}
-                        type="file"
-                        accept="video/mp4,.mp4"
-                        onChange={(event) => handleVideoUpload(idx, event)}
-                        className="hidden"
-                        data-testid={`q-video-upload-${idx}`}
-                      />
-                      {q.options?.video?.content && (
+                      <div className="space-y-2">
+                        <Label className="text-xs text-zinc-500 mb-1.5 block">Link do filmiku</Label>
+                        <div className="flex items-center gap-2">
+                          <LinkIcon className="w-4 h-4 text-[#00E5FF] shrink-0" />
+                          <Input
+                            value={q.options?.video?.url || ""}
+                            onChange={(event) => handleVideoUrlChange(idx, event.target.value)}
+                            placeholder="https://youtu.be/... albo bezposredni link .mp4"
+                            className="bg-black/40 border-white/10 text-zinc-100 text-sm"
+                            data-testid={`q-video-url-${idx}`}
+                          />
+                        </div>
+                      </div>
+                      {parseVideoFromOptions(q.options)?.src && (
                         <div className="space-y-3 rounded-lg border border-white/5 bg-black/20 p-3">
                           <div className="flex items-center gap-3">
                             <Video className="w-4 h-4 text-[#00E5FF] shrink-0" />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm text-zinc-200">{q.options.video.filename}</p>
-                              <p className="text-xs text-zinc-600">{formatBytes(q.options.video.size || 0)}</p>
+                              <p className="truncate text-sm text-zinc-200">{q.options.video.url || q.options.video.filename || "Filmik"}</p>
+                              <p className="text-xs text-zinc-600">Podglad filmiku</p>
                             </div>
                             <button
                               type="button"
@@ -724,12 +713,7 @@ export default function StaffRecruitmentForm() {
                               <X className="w-4 h-4" />
                             </button>
                           </div>
-                          <video
-                            src={parseVideoFromOptions(q.options)?.src}
-                            controls
-                            className="w-full rounded-lg border border-white/10 bg-black"
-                            data-testid={`q-video-preview-${idx}`}
-                          />
+                          <VideoPlayer video={parseVideoFromOptions(q.options)} testId={`q-video-preview-${idx}`} />
                         </div>
                       )}
                     </div>

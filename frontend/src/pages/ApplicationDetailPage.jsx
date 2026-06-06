@@ -7,6 +7,7 @@ import { Loader2, ArrowLeft, Clock, FileText, FileCode, Download } from "lucide-
 import axios from "axios";
 import { API } from "../lib/api";
 import { parseVideoFromOptions } from "../lib/videoQuestion";
+import VideoPlayer from "../components/VideoPlayer";
 
 
 const STATUS_CONFIG = {
@@ -193,12 +194,7 @@ export default function ApplicationDetailPage() {
                 </div>
               ) : questionVideo?.src ? (
                 <div className="space-y-4">
-                  <video
-                    src={questionVideo.src}
-                    controls
-                    className="w-full rounded-lg border border-white/10 bg-black"
-                    data-testid={`answer-video-${q.id}`}
-                  />
+                  <VideoPlayer video={questionVideo} testId={`answer-video-${q.id}`} />
                   <p className="text-sm text-zinc-200 whitespace-pre-wrap" style={{ fontFamily: "'Outfit', sans-serif" }}>
                     {displayValue || <span className="text-zinc-600 italic">Brak odpowiedzi</span>}
                   </p>

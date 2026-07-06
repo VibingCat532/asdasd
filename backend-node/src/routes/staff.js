@@ -1568,7 +1568,7 @@ router.patch('/recruitments/:recruitmentId/applications/:applicationId/status', 
        updated AS (
          UPDATE applications SET
            status = $1,
-           reviewed_by_id = CASE WHEN $1 IN ('zaakceptowane', 'odrzucone') THEN $4 ELSE NULL END,
+           reviewed_by_id = CASE WHEN $1 IN ('zaakceptowane', 'odrzucone') THEN $4::uuid ELSE NULL END,
            updated_at = NOW()
          WHERE id = (SELECT id FROM previous)
          RETURNING id, status, updated_at

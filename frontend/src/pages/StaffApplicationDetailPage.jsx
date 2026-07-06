@@ -89,7 +89,7 @@ export default function StaffApplicationDetailPage() {
         reviewer_name: newStatus !== 'nowe' ? reviewerName : null,
       }));
     } catch (err) {
-      setError(err.response?.data?.detail || "Błąd zmiany statusu");
+      setError(err.response?.data?.error || err.response?.data?.detail || "Błąd zmiany statusu");
     } finally {
       setChanging(false);
     }

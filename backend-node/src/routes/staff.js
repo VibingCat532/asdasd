@@ -1585,7 +1585,12 @@ router.patch('/recruitments/:recruitmentId/applications/:applicationId/status', 
     const app = result.rows[0];
     let discord_role_result = null;
     if (status === 'zaakceptowane') {
-      discord_role_result = await applyAcceptedDiscordRole(recruitmentId, applicationId);
+      try {
+        discord_role_result = await applyAcceptedDiscordRole(recruitmentId, applicationId);
+      } catch (roleErr) {
+        logger.error('Failed to assign Discord role after application acceptance', roleErr);
+        discord_role_result = { attempted: true, success: false, reason: 'discord_role_error' };
+      }
     }
 
     let discord_dm_result = null;
@@ -1663,18 +1668,24 @@ router.get('/recruitments/:recruitmentId/applications/:applicationId', requireAu
 
     const { recruitmentId, applicationId } = req.params;
 
-    // Check access
-    const hasAccess = await checkRecruitmentAccess(staffUser.userId, recruitmentId);
-    if (!hasAccess) {
+    // Check access and permissions
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+    if (!permission.hasAccess) {
       return res.status(403).json({ error: 'Brak dostępu do tej rekrutacji' });
     }
 
     // Fetch application
     const appResult = await query(
-      `SELECT a.id, a.user_id, a.status, a.questions_snapshot, a.created_at, u.discord_username, u.discord_avatar,
-              COALESCE(reviewer.discord_global_name, reviewer.discord_username) as reviewer_name
+      `SELECT a.id, a.user_id, a.status, a.questions_snapshot, a.created_at,
+              u.discord_id as applicant_discord_id,
+              u.discord_username as applicant_username,
+              u.discord_avatar as applicant_avatar,
+              u.discord_global_name as applicant_global_name,
+              COALESCE(reviewer.discord_global_name, reviewer.discord_username) as reviewer_name,
+              COALESCE(r.name, a.recruitment_snapshot->>'name', 'Usunieta rekrutacja') as recruitment_name
        FROM applications a
        JOIN users u ON u.id = a.user_id
+       LEFT JOIN recruitments r ON r.id = a.recruitment_id
        LEFT JOIN users reviewer ON reviewer.id = a.reviewed_by_id
        WHERE a.id = $1 AND a.recruitment_id = $2`,
       [applicationId, recruitmentId]
@@ -1696,6 +1707,11 @@ router.get('/recruitments/:recruitmentId/applications/:applicationId', requireAu
     res.json({
       id: application.id,
       user_id: application.user_id,
+      recruitment_name: application.recruitment_name,
+      applicant_discord_id: application.applicant_discord_id,
+      applicant_username: application.applicant_username,
+      applicant_avatar: application.applicant_avatar,
+      applicant_global_name: application.applicant_global_name,
       discord_username: application.discord_username,
       discord_avatar: application.discord_avatar,
       status: application.status,
@@ -1708,6 +1724,7 @@ router.get('/recruitments/:recruitmentId/applications/:applicationId', requireAu
       })),
       created_at: application.created_at.toISOString(),
       reviewer_name: application.reviewer_name || null,
+      can_delete_application: permission.capabilities?.is_management === true,
     });
   } catch (err) {
     logger.error('Failed to get application details', err);

@@ -1509,69 +1509,6 @@ router.get('/recruitments/:recruitmentId/applications', requireAuth, async (req,
   }
 });
 
-router.get('/recruitments/:recruitmentId/applications/:applicationId', requireAuth, async (req, res) => {
-  try {
-    const staffUser = await getStaffUser(req);
-    if (!staffUser) {
-      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
-    }
-
-    const { recruitmentId, applicationId } = req.params;
-    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
-    if (!permission.canReviewApplications) {
-      return res.status(403).json({ error: 'Brak uprawnien do sprawdzania aplikacji' });
-    }
-
-    const appResult = await query(
-      `SELECT a.id, a.user_id, a.status, a.questions_snapshot, a.created_at,
-              r.name as recruitment_name,
-              u.discord_id as applicant_discord_id,
-              u.discord_username as applicant_username,
-              u.discord_avatar as applicant_avatar,
-              u.discord_global_name as applicant_global_name
-       FROM applications a
-       JOIN recruitments r ON r.id = a.recruitment_id
-       JOIN users u ON u.id = a.user_id
-       WHERE a.id = $1 AND a.recruitment_id = $2`,
-      [applicationId, recruitmentId]
-    );
-
-    if (appResult.rows.length === 0) {
-      return res.status(404).json({ error: 'Aplikacja nie znaleziona' });
-    }
-
-    const application = appResult.rows[0];
-    const answersResult = await query(
-      `SELECT question_id, question_label, question_type, answer_value
-       FROM application_answers WHERE application_id = $1`,
-      [applicationId]
-    );
-
-    res.json({
-      id: application.id,
-      user_id: application.user_id,
-      recruitment_name: application.recruitment_name,
-      applicant_discord_id: application.applicant_discord_id,
-      applicant_username: application.applicant_username,
-      applicant_avatar: application.applicant_avatar,
-      applicant_global_name: application.applicant_global_name,
-      status: application.status,
-      questions_snapshot: application.questions_snapshot,
-      answers: answersResult.rows.map(a => ({
-        question_id: a.question_id,
-        question_label: a.question_label,
-        question_type: a.question_type,
-        answer_value: a.answer_value,
-      })),
-      can_delete_application: permission.capabilities?.is_management === true,
-      created_at: application.created_at.toISOString(),
-    });
-  } catch (err) {
-    logger.error('Failed to get application details', err);
-    res.status(500).json({ error: 'Nie udalo sie pobrac szczegolow aplikacji' });
-  }
-});
-
 router.delete('/recruitments/:recruitmentId/applications/:applicationId', requireAuth, async (req, res) => {
   try {
     const staffUser = await getStaffUser(req);
@@ -1629,13 +1566,16 @@ router.patch('/recruitments/:recruitmentId/applications/:applicationId/status', 
          WHERE id = $2 AND recruitment_id = $3
        ),
        updated AS (
-         UPDATE applications SET status = $1, updated_at = NOW()
+         UPDATE applications SET
+           status = $1,
+           reviewed_by_id = CASE WHEN $1 IN ('zaakceptowane', 'odrzucone') THEN $4 ELSE NULL END,
+           updated_at = NOW()
          WHERE id = (SELECT id FROM previous)
          RETURNING id, status, updated_at
        )
        SELECT updated.id, updated.status, updated.updated_at, previous.status as previous_status
        FROM updated, previous`,
-      [status, applicationId, recruitmentId]
+      [status, applicationId, recruitmentId, staffUser.userId]
     );
 
     if (result.rows.length === 0) {
@@ -1731,9 +1671,11 @@ router.get('/recruitments/:recruitmentId/applications/:applicationId', requireAu
 
     // Fetch application
     const appResult = await query(
-      `SELECT a.id, a.user_id, a.status, a.questions_snapshot, a.created_at, u.discord_username, u.discord_avatar
+      `SELECT a.id, a.user_id, a.status, a.questions_snapshot, a.created_at, u.discord_username, u.discord_avatar,
+              COALESCE(reviewer.discord_global_name, reviewer.discord_username) as reviewer_name
        FROM applications a
        JOIN users u ON u.id = a.user_id
+       LEFT JOIN users reviewer ON reviewer.id = a.reviewed_by_id
        WHERE a.id = $1 AND a.recruitment_id = $2`,
       [applicationId, recruitmentId]
     );
@@ -1765,61 +1707,11 @@ router.get('/recruitments/:recruitmentId/applications/:applicationId', requireAu
         answer_value: a.answer_value,
       })),
       created_at: application.created_at.toISOString(),
+      reviewer_name: application.reviewer_name || null,
     });
   } catch (err) {
     logger.error('Failed to get application details', err);
     res.status(500).json({ error: 'Nie udało się pobrać szczegółów aplikacji' });
-  }
-});
-
-/**
- * PATCH /api/staff/recruitments/:recruitmentId/applications/:applicationId/status
- * Update application status
- */
-router.patch('/recruitments/:recruitmentId/applications/:applicationId/status', requireAuth, async (req, res) => {
-  try {
-    const staffUser = await getStaffUser(req);
-    if (!staffUser) {
-      return res.status(401).json({ error: 'Użytkownik nie znaleziony' });
-    }
-
-    const { recruitmentId, applicationId } = req.params;
-    const { status } = req.body;
-
-    const validStatuses = ['nowe', 'zaakceptowane', 'odrzucone'];
-    if (!validStatuses.includes(status)) {
-      return res.status(400).json({
-        error: `Status musi być jednym z: ${validStatuses.join(', ')}`,
-      });
-    }
-
-    // Check access
-    const hasAccess = await checkRecruitmentAccess(staffUser.userId, recruitmentId);
-    if (!hasAccess) {
-      return res.status(403).json({ error: 'Brak dostępu do tej rekrutacji' });
-    }
-
-    // Update status
-    const result = await query(
-      `UPDATE applications SET status = $1, updated_at = NOW()
-       WHERE id = $2 AND recruitment_id = $3
-       RETURNING id, status, updated_at`,
-      [status, applicationId, recruitmentId]
-    );
-
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'Aplikacja nie znaleziona' });
-    }
-
-    const app = result.rows[0];
-    res.json({
-      id: app.id,
-      status: app.status,
-      updated_at: app.updated_at.toISOString(),
-    });
-  } catch (err) {
-    logger.error('Failed to update application status', err);
-    res.status(500).json({ error: 'Nie udało się zaktualizować statusu' });
   }
 });
 

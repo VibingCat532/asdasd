@@ -279,9 +279,11 @@ router.get('/:applicationId', requireAuth, async (req, res) => {
     // Fetch application (must belong to current user)
     const appResult = await query(
       `SELECT a.id, a.status, a.questions_snapshot, a.created_at, a.recruitment_id, a.recruitment_snapshot,
-              COALESCE(r.name, a.recruitment_snapshot->>'name', 'Usunieta rekrutacja') as recruitment_name
+              COALESCE(r.name, a.recruitment_snapshot->>'name', 'Usunieta rekrutacja') as recruitment_name,
+              COALESCE(reviewer.discord_global_name, reviewer.discord_username) as reviewer_name
        FROM applications a
        LEFT JOIN recruitments r ON r.id = a.recruitment_id
+       LEFT JOIN users reviewer ON reviewer.id = a.reviewed_by_id
        WHERE a.id = $1 AND a.user_id = $2`,
       [applicationId, userId]
     );
@@ -316,6 +318,7 @@ router.get('/:applicationId', requireAuth, async (req, res) => {
       questions_snapshot: application.questions_snapshot,
       answers,
       created_at: application.created_at.toISOString(),
+      reviewer_name: application.reviewer_name || null,
     });
   } catch (err) {
     logger.error('Failed to get application details', err);

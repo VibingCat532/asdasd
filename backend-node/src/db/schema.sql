@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS applications (
     recruitment_id UUID REFERENCES recruitments(id) ON DELETE SET NULL,
     user_id UUID NOT NULL REFERENCES users(id),
     status TEXT NOT NULL DEFAULT 'nowe',
+    reviewed_by_id UUID REFERENCES users(id),
     recruitment_snapshot JSONB,
     questions_snapshot JSONB NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -81,6 +82,9 @@ ADD COLUMN IF NOT EXISTS recruitment_snapshot JSONB;
 
 ALTER TABLE applications
 ALTER COLUMN recruitment_id DROP NOT NULL;
+
+ALTER TABLE applications
+ADD COLUMN IF NOT EXISTS reviewed_by_id UUID REFERENCES users(id);
 
 UPDATE applications a
 SET recruitment_snapshot = jsonb_build_object(

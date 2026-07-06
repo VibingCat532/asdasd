@@ -130,7 +130,7 @@ export default function ApplicationDetailPage() {
             {application.recruitment_name}
           </h1>
         </div>
-        <div className="flex items-center gap-4 ml-8">
+        <div className="flex items-center gap-4 ml-8 flex-wrap">
           <Badge className={`${status.classes} text-xs font-mono uppercase px-2.5 py-0.5`} data-testid="application-status-badge">
             {status.label}
           </Badge>
@@ -138,6 +138,11 @@ export default function ApplicationDetailPage() {
             <Clock className="w-3 h-3" />
             {new Date(application.created_at).toLocaleDateString("pl-PL", { day: "numeric", month: "long", year: "numeric" })}
           </span>
+          {application.reviewer_name && application.status !== 'nowe' && (
+            <span className="text-xs text-zinc-500" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+              Sprawdził: {application.reviewer_name}
+            </span>
+          )}
         </div>
       </div>
 

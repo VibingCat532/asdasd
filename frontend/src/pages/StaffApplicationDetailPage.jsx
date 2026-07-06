@@ -81,7 +81,13 @@ export default function StaffApplicationDetailPage() {
     try {
       const res = await axios.patch(`${API}/staff/recruitments/${recId}/applications/${appId}/status`,
         { status: newStatus }, { withCredentials: true });
-      setApp(prev => ({ ...prev, status: newStatus, discord_role_result: res.data.discord_role_result }));
+      const reviewerName = user?.discord_global_name || user?.discord_username || null;
+      setApp(prev => ({
+        ...prev,
+        status: newStatus,
+        discord_role_result: res.data.discord_role_result,
+        reviewer_name: newStatus !== 'nowe' ? reviewerName : null,
+      }));
     } catch (err) {
       setError(err.response?.data?.detail || "Błąd zmiany statusu");
     } finally {
@@ -152,6 +158,11 @@ export default function StaffApplicationDetailPage() {
             <Clock className="w-3 h-3" />
             {new Date(app.created_at).toLocaleDateString("pl-PL", { day: "numeric", month: "long", year: "numeric" })}
           </span>
+          {app.reviewer_name && app.status !== 'nowe' && (
+            <span className="text-xs text-zinc-500" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
+              Sprawdził: {app.reviewer_name}
+            </span>
+          )}
         </div>
 
         {/* Status change actions */}

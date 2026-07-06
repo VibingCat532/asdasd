@@ -1,0 +1,147 @@
+router.get('/recruitments/:recruitmentId/applications/:applicationId', requireAuth, async (req, res) => {
+ */
+ * Get application details for staff review
+ * GET /api/staff/recruitments/:recruitmentId/applications/:applicationId
+/**
+
+});
+  }
+    res.status(500).json({ error: 'Nie udało się pobrać aplikacji' });
+    logger.error('Failed to list applications', err);
+  } catch (err) {
+    res.json(applications);
+
+    }));
+      created_at: r.created_at.toISOString(),
+      status: r.status,
+      discord_username: r.discord_username,
+      user_id: r.user_id,
+      id: r.id,
+    const applications = result.rows.map(r => ({
+
+    );
+      [recruitmentId]
+       ORDER BY a.created_at DESC`,
+       WHERE a.recruitment_id = $1
+       JOIN users u ON u.id = a.user_id
+       FROM applications a
+      `SELECT a.id, a.user_id, a.status, a.created_at, u.discord_username
+    const result = await query(
+
+    }
+      return res.status(403).json({ error: 'Brak dostępu do tej rekrutacji' });
+    if (!hasAccess) {
+    const hasAccess = await checkRecruitmentAccess(staffUser.userId, recruitmentId);
+    // Check access
+
+    const { recruitmentId } = req.params;
+
+    }
+      return res.status(401).json({ error: 'Użytkownik nie znaleziony' });
+    if (!staffUser) {
+    const staffUser = await getStaffUser(req);
+  try {
+router.get('/recruitments/:recruitmentId/applications', requireAuth, async (req, res) => {
+
+});
+  }
+    res.status(500).json({ error: 'Nie udalo sie zaktualizowac statusu' });
+    logger.error('Failed to update application status', err);
+  } catch (err) {
+    });
+      discord_dm_result,
+      discord_role_result,
+      updated_at: app.updated_at.toISOString(),
+      status: app.status,
+      id: app.id,
+    res.json({
+
+    }
+      }
+        discord_dm_result = { attempted: true, success: false, reason: 'notification_error' };
+        logger.error('Failed to notify applicant about application status', notifyErr);
+      } catch (notifyErr) {
+        discord_dm_result = await notifyApplicantApplicationStatus(recruitmentId, applicationId, status);
+      try {
+    if (app.previous_status !== status && ['zaakceptowane', 'odrzucone'].includes(status)) {
+    let discord_dm_result = null;
+
+    }
+      discord_role_result = await applyAcceptedDiscordRole(recruitmentId, applicationId);
+    if (status === 'zaakceptowane') {
+    let discord_role_result = null;
+    const app = result.rows[0];
+
+    }
+      return res.status(404).json({ error: 'Aplikacja nie znaleziona' });
+    if (result.rows.length === 0) {
+
+    );
+      [status, applicationId, recruitmentId, staffUser.userId]
+       FROM updated, previous`,
+       SELECT updated.id, updated.status, updated.updated_at, previous.status as previous_status
+       )
+         RETURNING id, status, updated_at
+         WHERE id = (SELECT id FROM previous)
+           updated_at = NOW()
+           reviewed_by_id = CASE WHEN $1 IN ('zaakceptowane', 'odrzucone') THEN $4 ELSE NULL END,
+           status = $1,
+         UPDATE applications SET
+       updated AS (
+       ),
+         WHERE id = $2 AND recruitment_id = $3
+         FROM applications
+         SELECT id, status
+      `WITH previous AS (
+    const result = await query(
+
+    }
+      return res.status(403).json({ error: 'Brak uprawnien do zmiany statusu aplikacji' });
+    if (!permission.canReviewApplications) {
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+
+    }
+      return res.status(400).json({ error: `Status musi byc jednym z: ${validStatuses.join(', ')}` });
+    if (!validStatuses.includes(status)) {
+    const validStatuses = ['nowe', 'zaakceptowane', 'odrzucone'];
+    const { status } = req.body;
+    const { recruitmentId, applicationId } = req.params;
+
+    }
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    if (!staffUser) {
+    const staffUser = await getStaffUser(req);
+  try {
+router.patch('/recruitments/:recruitmentId/applications/:applicationId/status', requireAuth, async (req, res) => {
+
+});
+  }
+    res.status(500).json({ error: 'Nie udalo sie usunac podania' });
+    logger.error('Failed to delete application', err);
+  } catch (err) {
+    res.json({ success: true, message: 'Podanie usuniete' });
+
+    }
+      return res.status(404).json({ error: 'Podanie nie znalezione' });
+    if (result.rows.length === 0) {
+
+    );
+      [applicationId, recruitmentId]
+       RETURNING id`,
+       WHERE id = $1 AND recruitment_id = $2
+      `DELETE FROM applications
+    const result = await query(
+    const { recruitmentId, applicationId } = req.params;
+
+    }
+      return res.status(403).json({ error: 'Brak uprawnien do usuniecia podania' });
+    if (!capabilities.is_management) {
+    const capabilities = await resolveUserCapabilities(staffUser.discordId, staffUser.userId);
+
+    }
+      return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
+    if (!staffUser) {
+    const staffUser = await getStaffUser(req);
+  try {
+router.delete('/recruitments/:recruitmentId/applications/:applicationId', requireAuth, async (req, res) => {
+

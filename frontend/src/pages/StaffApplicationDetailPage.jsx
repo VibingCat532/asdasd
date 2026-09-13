@@ -96,7 +96,7 @@ export default function StaffApplicationDetailPage() {
   };
 
   const deleteApplication = async () => {
-    if (!window.confirm("Na pewno usunac to podanie? Tej akcji nie mozna cofnac.")) return;
+    if (!window.confirm("Na pewno usunąć to zgłoszenie? Tej akcji nie mozna cofnac.")) return;
 
     setDeleting(true);
     setError(null);
@@ -132,7 +132,7 @@ export default function StaffApplicationDetailPage() {
       <Link to={`/staff/recruitments/${recId}/applications`}
         className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6"
         data-testid="back-to-apps-list">
-        <ArrowLeft className="w-3.5 h-3.5" />Aplikacje — {app.recruitment_name}
+        <ArrowLeft className="w-3.5 h-3.5" />{app.recruitment_category === "complaints" ? "Skargi" : "Aplikacje"} — {app.recruitment_name}
       </Link>
 
       {/* Applicant header */}
@@ -191,7 +191,7 @@ export default function StaffApplicationDetailPage() {
               data-testid="delete-application-button"
             >
               {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-              {deleting ? "Usuwanie..." : "Usun podanie"}
+              {deleting ? "Usuwanie..." : "Usuń zgłoszenie"}
             </button>
           </div>
         )}

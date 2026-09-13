@@ -39,9 +39,10 @@ const FIELD_TYPES = [
 const CATEGORIES = [
   { value: "general", label: "Ogólna" },
   { value: "factions", label: "Frakcje" },
+  { value: "complaints", label: "Skargi" },
 ];
 
-const DEFAULT_ACCESS = { can_edit_questions: false, can_review_applications: true };
+const DEFAULT_ACCESS = { can_edit_questions: false, can_review_applications: true, can_view_statistics: false };
 const DEFAULT_SECTION_TITLE = "Ogólne";
 
 function normalizeSectionTitle(title) {
@@ -76,8 +77,10 @@ export default function StaffRecruitmentForm() {
   const navigate = useNavigate();
   const { user, staffInfo, loading: authLoading } = useAuth();
   const isEdit = !!id;
+  const initialCategory = new URLSearchParams(window.location.search).get("category") === "complaints" ? "complaints" : "general";
 
-  const [form, setForm] = useState({ name: "", description: "", status: "active", theme_color: "#00E5FF", category: "general", scope: "", accepted_discord_role_id: "" });
+  const [form, setForm] = useState({ name: "", description: "", status: "active", theme_color: "#00E5FF", category: initialCategory, scope: "", accepted_discord_role_id: "" });
+  const isComplaint = form.category === "complaints";
   const [sections, setSections] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [accessUsers, setAccessUsers] = useState([]);
@@ -297,7 +300,7 @@ export default function StaffRecruitmentForm() {
 
   const addAccess = async (userId) => {
     const access = getPendingAccess(userId);
-    if (!access.can_edit_questions && !access.can_review_applications) {
+    if (!access.can_edit_questions && !access.can_review_applications && !access.can_view_statistics) {
       setErrors(["Wybierz przynajmniej jedna permisje"]);
       return;
     }
@@ -307,6 +310,7 @@ export default function StaffRecruitmentForm() {
         user_id: userId,
         can_edit_questions: !!access.can_edit_questions,
         can_review_applications: !!access.can_review_applications,
+        can_view_statistics: !!access.can_view_statistics,
       }, { withCredentials: true });
       setPendingAccess(prev => {
         const next = { ...prev };
@@ -321,7 +325,7 @@ export default function StaffRecruitmentForm() {
 
   const updateAccess = async (accessUser, patch) => {
     const next = { ...accessUser, ...patch };
-    if (!next.can_edit_questions && !next.can_review_applications) {
+    if (!next.can_edit_questions && !next.can_review_applications && !next.can_view_statistics) {
       setErrors(["Uzytkownik musi miec przynajmniej jedna permisje"]);
       return;
     }
@@ -330,6 +334,7 @@ export default function StaffRecruitmentForm() {
       await axios.patch(API + "/staff/recruitments/" + id + "/access/" + accessUser.id, {
         can_edit_questions: !!next.can_edit_questions,
         can_review_applications: !!next.can_review_applications,
+        can_view_statistics: !!next.can_view_statistics,
       }, { withCredentials: true });
       setAccessUsers(prev => prev.map(u => u.id === accessUser.id ? next : u));
     } catch (err) {
@@ -457,10 +462,10 @@ export default function StaffRecruitmentForm() {
 
       <div className="hs-animate-fade-up mb-6">
         <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00E5FF] mb-2" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-          {isEdit ? "Edycja rekrutacji" : "Nowa rekrutacja"}
+          {isEdit ? "Edycja panelu" : isComplaint ? "Nowy panel skarg" : "Nowa rekrutacja"}
         </p>
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight" style={{ fontFamily: "'Unbounded', sans-serif", color: "#FAFAFA" }} data-testid="form-title">
-          {isEdit ? (form.name || "...") : "Utwórz rekrutację"}
+          {isEdit ? (form.name || "...") : isComplaint ? "Utwórz panel skarg" : "Utwórz rekrutację"}
         </h1>
       </div>
 
@@ -483,7 +488,7 @@ export default function StaffRecruitmentForm() {
           <TabsContent value="basic" className="space-y-5">
             <div>
               <Label className="text-zinc-300 mb-1.5 block text-sm">Nazwa *</Label>
-              <Input value={form.name} onChange={e => updateForm("name", e.target.value)} placeholder="np. Administracja"
+              <Input value={form.name} onChange={e => updateForm("name", e.target.value)} placeholder={isComplaint ? "np. Skargi na policję" : "np. Administracja"}
                 className="bg-black/40 border-white/10 focus:border-[#00E5FF] text-zinc-100" data-testid="input-name" />
             </div>
             <div>
@@ -526,13 +531,17 @@ export default function StaffRecruitmentForm() {
                   </SelectContent>
                 </Select>
               </div>
-              <div>
+              {!isComplaint && <div>
                 <Label className="text-zinc-300 mb-1.5 block text-sm">Rola Discord (po akceptacji)</Label>
                 <Input value={form.accepted_discord_role_id} onChange={e => updateForm("accepted_discord_role_id", e.target.value)}
                   placeholder="ID roli Discord" className="bg-black/40 border-white/10 focus:border-[#00E5FF] text-zinc-100 font-mono text-xs"
                   data-testid="input-role-id" />
-              </div>
+              </div>}
             </div>
+            {isComplaint && <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-200">
+              Skargi są obsługiwane na stronie. Każdą sprawę można zgłosić osobno, bez nadawania ról, dołączania do serwera ani wysyłania powiadomień na Discordzie.
+              W zakładce Pytania przygotuj formularz, np. osoba lub jednostka, opis zdarzenia, data i linki do dowodów.
+            </p>}
           </TabsContent>
         )}
 
@@ -765,7 +774,7 @@ export default function StaffRecruitmentForm() {
                                 onCheckedChange={v => updatePendingAccess(u.id, { can_edit_questions: !!v })}
                                 className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
                               />
-                              Moze edytowac pytania
+                              Może edytować pytania
                             </label>
                             <label className="flex items-center gap-2 text-xs text-zinc-400">
                               <Checkbox
@@ -773,7 +782,15 @@ export default function StaffRecruitmentForm() {
                                 onCheckedChange={v => updatePendingAccess(u.id, { can_review_applications: !!v })}
                                 className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
                               />
-                              Moze sprawdzac aplikacje
+                              Może sprawdzać zgłoszenia
+                            </label>
+                          <label className="flex items-center gap-2 text-xs text-zinc-400">
+                              <Checkbox
+                                checked={!!selected.can_view_statistics}
+                                onCheckedChange={v => updatePendingAccess(u.id, { can_view_statistics: !!v })}
+                                className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
+                              />
+                              Może przeglądać statystyki
                             </label>
                           </div>
                         </div>
@@ -812,7 +829,7 @@ export default function StaffRecruitmentForm() {
                               onCheckedChange={v => updateAccess(u, { can_edit_questions: !!v })}
                               className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
                             />
-                            Moze edytowac pytania
+                            Może edytować pytania
                           </label>
                           <label className="flex items-center gap-2 text-xs text-zinc-400">
                             <Checkbox
@@ -820,7 +837,15 @@ export default function StaffRecruitmentForm() {
                               onCheckedChange={v => updateAccess(u, { can_review_applications: !!v })}
                               className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
                             />
-                            Moze sprawdzac aplikacje
+                            Może sprawdzać zgłoszenia
+                          </label>
+                          <label className="flex items-center gap-2 text-xs text-zinc-400">
+                            <Checkbox
+                              checked={!!u.can_view_statistics}
+                              onCheckedChange={v => updateAccess(u, { can_view_statistics: !!v })}
+                              className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
+                            />
+                            Może przeglądać statystyki
                           </label>
                         </div>
                       </div>
@@ -842,9 +867,9 @@ export default function StaffRecruitmentForm() {
               <div className="flex items-start gap-3">
                 <Ban className="w-4 h-4 text-red-300 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-sm text-red-200 font-medium">Blacklista podan</p>
+                  <p className="text-sm text-red-200 font-medium">Blacklista zgłoszeń</p>
                   <p className="text-xs text-red-200/60 mt-1">
-                    Osoby dodane tutaj nie beda mogly zlozyc podania w tej rekrutacji po zalogowaniu.
+                    Osoby dodane tutaj nie będą mogły wysłać zgłoszenia w tym panelu po zalogowaniu.
                   </p>
                 </div>
               </div>

@@ -107,7 +107,7 @@ router.get('/:recruitmentId', async (req, res) => {
         [userId, recruitmentId]
       );
 
-      if (appResult.rows.length > 0) {
+      if (recruitment.category !== 'complaints' && appResult.rows.length > 0) {
         userApplicationStatus = appResult.rows[0].status;
         userCanApply = appResult.rows[0].status === 'odrzucone';
         if (!userCanApply) {

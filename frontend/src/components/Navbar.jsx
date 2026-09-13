@@ -39,10 +39,10 @@ export default function Navbar() {
           </Link>
 
           <div className="hidden sm:flex items-center gap-1">
-            <NavLink to="/" active={isActive("/")} icon={<Home className="w-3.5 h-3.5" />} label="Rekrutacje" testId="nav-rekrutacje" />
+            <NavLink to="/" active={isActive("/")} icon={<Home className="w-3.5 h-3.5" />} label="Rekrutacje i skargi" testId="nav-rekrutacje" />
             {user && (
               <NavLink to="/my-applications" active={startsWith("/my-applications")}
-                icon={<FileText className="w-3.5 h-3.5" />} label="Moje Aplikacje" testId="nav-moje-aplikacje" />
+                icon={<FileText className="w-3.5 h-3.5" />} label="Moje zgłoszenia" testId="nav-moje-aplikacje" />
             )}
             {isStaff && (
               <NavLink to="/staff" active={location.pathname === "/staff" || startsWith("/staff/recruitments")}

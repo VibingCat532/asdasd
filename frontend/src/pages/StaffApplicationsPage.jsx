@@ -57,7 +57,7 @@ export default function StaffApplicationsPage() {
       </Link>
 
       <div className="hs-animate-fade-up mb-6">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00E5FF] mb-2" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Przegląd aplikacji</p>
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00E5FF] mb-2" style={{ fontFamily: "'JetBrains Mono', monospace" }}>Przegląd zgłoszeń</p>
         <h1 className="text-xl sm:text-2xl font-bold tracking-tight" style={{ fontFamily: "'Unbounded', sans-serif", color: "#FAFAFA" }} data-testid="applications-rec-name">{recName}</h1>
       </div>
 
@@ -82,7 +82,7 @@ export default function StaffApplicationsPage() {
       {filtered.length === 0 ? (
         <div className="text-center py-16 rounded-xl bg-[#0F0F13] border border-white/5" data-testid="no-applications">
           <FileText className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
-          <p className="text-zinc-400">Brak aplikacji{filter !== "all" ? ` ze statusem "${filter}"` : ""}</p>
+          <p className="text-zinc-400">Brak zgłoszeń{filter !== "all" ? ` ze statusem "${filter}"` : ""}</p>
         </div>
       ) : (
         <div className="space-y-3" data-testid="applications-list">

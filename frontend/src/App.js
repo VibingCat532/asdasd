@@ -14,6 +14,8 @@ import StaffApplicationsPage from "./pages/StaffApplicationsPage";
 import StaffApplicationDetailPage from "./pages/StaffApplicationDetailPage";
 import StaffApplicationHistoryPage from "./pages/StaffApplicationHistoryPage";
 
+import StaffStatisticsPage from "./pages/StaffStatisticsPage";
+
 function App() {
   return (
     <BrowserRouter>
@@ -31,6 +33,7 @@ function App() {
               <Route path="/staff/recruitments/:id/edit" element={<StaffRecruitmentForm />} />
               <Route path="/staff/recruitments/:id/applications" element={<StaffApplicationsPage />} />
               <Route path="/staff/recruitments/:recId/applications/:appId" element={<StaffApplicationDetailPage />} />
+              <Route path="/staff/recruitments/:id/statistics" element={<StaffStatisticsPage />} />
               <Route path="/staff/history" element={<StaffApplicationHistoryPage />} />
             </Routes>
           </main>

@@ -11,11 +11,13 @@ const CATEGORY_FILTERS = [
   { value: "all", label: "Wszystkie" },
   { value: "general", label: "Ogólna" },
   { value: "factions", label: "Frakcje" },
+  { value: "complaints", label: "Skargi" },
 ];
 
 const CATEGORY_LABELS = {
   general: "Ogólna",
   factions: "Frakcje",
+  complaints: "Skargi",
 };
 
 const getCategory = (recruitment) => recruitment?.category || "general";
@@ -97,7 +99,7 @@ export default function HomePage() {
         <div className="max-w-5xl mx-auto px-4 sm:px-6 pt-16 pb-12 relative">
           <div className="hs-animate-fade-up">
             <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00E5FF] mb-4" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-              System Rekrutacji
+              Rekrutacje i skargi
             </p>
             <h1
               className="text-4xl sm:text-5xl font-black tracking-tighter uppercase mb-4"
@@ -107,8 +109,8 @@ export default function HomePage() {
               HoodStories
             </h1>
             <p className="text-base text-zinc-400 max-w-lg leading-relaxed" style={{ fontFamily: "'Outfit', sans-serif" }}>
-              Przeglądaj dostępne rekrutacje i dołącz do naszego zespołu.
-              {!user && " Zaloguj się kontem Discord, aby złożyć aplikację."}
+              Przeglądaj rekrutacje, dołącz do zespołu lub zgłoś skargę.
+              {!user && " Zaloguj się kontem Discord, aby wysłać zgłoszenie."}
             </p>
           </div>
         </div>
@@ -160,7 +162,7 @@ export default function HomePage() {
                     className="text-xl sm:text-2xl font-bold tracking-tight uppercase"
                     style={{ fontFamily: "'Unbounded', sans-serif", color: "#FAFAFA" }}
                   >
-                    Aktywne Rekrutacje
+                    {selectedCategory === "complaints" ? "Panele skarg" : selectedCategory === "all" ? "Aktywne panele" : "Aktywne rekrutacje"}
                   </h2>
                   <Badge className="bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30 text-xs font-mono uppercase">
                     {active.length}
@@ -202,12 +204,12 @@ export default function HomePage() {
 
             {recruitmentList.length === 0 && (
               <div className="text-center py-20 text-zinc-500" data-testid="no-recruitments">
-                <p className="text-lg">Brak dostępnych rekrutacji</p>
+                <p className="text-lg">Brak dostępnych paneli</p>
               </div>
             )}
             {recruitmentList.length > 0 && filteredRecruitments.length === 0 && (
               <div className="text-center py-20 text-zinc-500" data-testid="no-recruitments-in-category">
-                <p className="text-lg">Brak rekrutacji w tej kategorii</p>
+                <p className="text-lg">Brak paneli w tej kategorii</p>
               </div>
             )}
           </>
@@ -277,7 +279,7 @@ function RecruitmentCard({ recruitment, index, closed }) {
           </span>
           {!closed && (
             <span className="flex items-center gap-1 text-xs font-medium text-[#00E5FF] opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-              Aplikuj <ArrowRight className="w-3 h-3" />
+              {r.category === "complaints" ? "Złóż skargę" : "Aplikuj"} <ArrowRight className="w-3 h-3" />
             </span>
           )}
         </div>

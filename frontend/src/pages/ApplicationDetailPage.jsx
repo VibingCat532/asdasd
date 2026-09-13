@@ -115,7 +115,7 @@ export default function ApplicationDetailPage() {
         data-testid="back-to-applications"
       >
         <ArrowLeft className="w-3.5 h-3.5" />
-        Moje Aplikacje
+        Moje zgłoszenia
       </Link>
 
       {/* Header */}
@@ -217,7 +217,7 @@ export default function ApplicationDetailPage() {
       {/* Footer note */}
       <div className="mt-8 text-center">
         <p className="text-xs text-zinc-600" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-          Aplikacje nie mogą być edytowane po złożeniu.
+          Zgłoszenia nie mogą być edytowane po wysłaniu.
         </p>
       </div>
     </div>

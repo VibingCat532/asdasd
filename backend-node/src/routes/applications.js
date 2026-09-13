@@ -100,7 +100,7 @@ async function submitApplication(req, res) {
       [userId, recruitmentId]
     );
 
-    if (existingResult.rows.length > 0) {
+    if (recruitment.category !== 'complaints' && existingResult.rows.length > 0) {
       const existingStatus = existingResult.rows[0].status;
       if (existingStatus === 'nowe') {
         return res.status(409).json({

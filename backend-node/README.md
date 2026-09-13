@@ -284,3 +284,12 @@ MIT
 ## Support
 
 For issues, see [../README.md](../README.md)
+
+## Statistics and complaint panels
+
+- `GET /api/staff/recruitments/:id/statistics` returns `recruitment`, `summary`, `reviewers`, and a 14-day `daily` series in Europe/Warsaw time. Access requires `can_view_statistics`; management and the panel creator have access automatically.
+- Access grants support three independent boolean fields: `can_edit_questions`, `can_review_applications`, and `can_view_statistics`. A statistics grant alone does not allow reading individual submissions or changing their status. At least one permission is required.
+- Statistics count each existing submission once using its current decision and last reviewer. Reopening removes it from reviewed counts; changing a decision transfers credit. Repeating the same status preserves attribution and the decision timestamp. Historical decisions without a reviewer are grouped separately; deleted submissions are excluded.
+- Set `category` to `complaints` to create a complaint panel. It uses the same configurable questions, staff access and blacklist, allows multiple reports per user, and performs no Discord role assignment, guild joining or status DMs. Discord login remains the authentication method. Existing panel creation limits still apply.
+- The existing startup schema initialization adds `can_view_statistics` automatically, defaulting to `false` for existing explicit grants. No manual data backfill is required.
+- Run `npm test` in `backend-node` for integration checks using an isolated embedded PostgreSQL instance. The tests do not connect to the configured database or Discord.

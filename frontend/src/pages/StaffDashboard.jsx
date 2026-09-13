@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { Badge } from "../components/ui/badge";
 import { Switch } from "../components/ui/switch";
-import { Loader2, Plus, ShieldCheck, Users, FileText, Settings, AlertTriangle, Lock, Trash2, History } from "lucide-react";
+import { Loader2, Plus, ShieldCheck, Users, FileText, Settings, AlertTriangle, Lock, Trash2, History, BarChart3 } from "lucide-react";
 import axios from "axios";
 import { API } from "../lib/api";
 
@@ -143,6 +143,12 @@ export default function StaffDashboard() {
             </p>
           ) : null}
 
+          {staffInfo.can_create_recruitment && (
+            <Link to="/staff/recruitments/new?category=complaints" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border border-amber-500/30 text-amber-200 hover:bg-amber-500/10" data-testid="create-complaint-panel-button">
+              <Plus className="w-4 h-4" /> Nowy panel skarg
+            </Link>
+          )}
+
           {isManagement && (
             <Link
               to="/staff/history"
@@ -174,6 +180,7 @@ export default function StaffDashboard() {
                   <h3 className="text-base font-semibold text-zinc-200" style={{ fontFamily: "'Outfit', sans-serif" }}>
                     {rec.name}
                   </h3>
+                  {rec.category === "complaints" && <span className="text-xs text-amber-300">Panel skarg</span>}
                 </div>
                 <div className="flex gap-1.5 shrink-0">
                   <Badge
@@ -192,14 +199,14 @@ export default function StaffDashboard() {
                         : "bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs font-mono uppercase"
                     }
                   >
-                    {rec.permission_level === "full" ? "pelny" : "recenzent"}
+                    {{ full: "pełny", editor: "edytor", reviewer: "recenzent", statistics: "statystyki" }[rec.permission_level]}
                   </Badge>
                 </div>
               </div>
 
               <div className="flex items-center gap-4 mb-4 text-xs text-zinc-500" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
                 <span className="flex items-center gap-1">
-                  <Users className="w-3 h-3" /> {rec.app_count} aplikacji
+                  <Users className="w-3 h-3" /> {rec.app_count} zgłoszeń
                 </span>
                 {rec.pending_count > 0 && (
                   <span className="flex items-center gap-1 text-[#00E5FF]">
@@ -210,7 +217,7 @@ export default function StaffDashboard() {
 
               {rec.can_update_status && (
                 <div className="flex items-center justify-between gap-3 mb-4 rounded-lg border border-white/5 bg-black/20 px-3 py-2">
-                  <span className="text-xs font-medium text-zinc-400">Aktywna rekrutacja</span>
+                  <span className="text-xs font-medium text-zinc-400">Przyjmowanie zgłoszeń</span>
                   <Switch
                     checked={rec.status === "active"}
                     disabled={updatingStatusId === rec.id}
@@ -222,21 +229,24 @@ export default function StaffDashboard() {
                 </div>
               )}
 
-              <div className="flex gap-2">
-                <Link
+              <div className="flex flex-wrap gap-2">
+                {rec.can_review_applications && <Link
                   to={`/staff/recruitments/${rec.id}/applications`}
                   className="flex-1 text-center px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-zinc-300 hover:bg-white/10 transition-colors"
                   data-testid={`review-apps-${rec.slug}`}
                 >
-                  <FileText className="w-3 h-3 inline mr-1" />Aplikacje
-                </Link>
-                <Link
+                  <FileText className="w-3 h-3 inline mr-1" />{rec.category === "complaints" ? "Skargi" : "Aplikacje"}
+                </Link>}
+                {(rec.can_edit_questions || rec.can_update_status) && <Link
                   to={`/staff/recruitments/${rec.id}/edit`}
                   className="flex-1 text-center px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-zinc-300 hover:bg-white/10 transition-colors"
                   data-testid={`edit-rec-${rec.slug}`}
                 >
                   <Settings className="w-3 h-3 inline mr-1" />Edytuj
-                </Link>
+                </Link>}
+                {rec.can_view_statistics && <Link to={`/staff/recruitments/${rec.id}/statistics`} className="flex-1 text-center px-3 py-2 rounded-lg text-xs font-medium bg-[#00E5FF]/10 text-[#00E5FF] hover:bg-[#00E5FF]/20" data-testid={`statistics-${rec.slug}`}>
+                  <BarChart3 className="w-3 h-3 inline mr-1" />Statystyki
+                </Link>}
                 {rec.can_delete_recruitment && (
                   <button
                     onClick={() => handleDeleteRecruitment(rec)}

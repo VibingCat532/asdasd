@@ -129,6 +129,9 @@ ADD COLUMN IF NOT EXISTS can_edit_questions BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE recruitment_access
 ADD COLUMN IF NOT EXISTS can_review_applications BOOLEAN NOT NULL DEFAULT true;
 
+ALTER TABLE recruitment_access
+ADD COLUMN IF NOT EXISTS can_view_statistics BOOLEAN NOT NULL DEFAULT false;
+
 DO $$
 BEGIN
     IF EXISTS (

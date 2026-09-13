@@ -47,7 +47,7 @@ export default function MyApplicationsPage() {
           Zaloguj się
         </h2>
         <p className="text-zinc-400 mb-6" style={{ fontFamily: "'Outfit', sans-serif" }}>
-          Musisz być zalogowany, aby zobaczyć swoje aplikacje.
+          Musisz być zalogowany, aby zobaczyć swoje zgłoszenia.
         </p>
         <button
           onClick={login}
@@ -73,7 +73,7 @@ export default function MyApplicationsPage() {
           style={{ fontFamily: "'Unbounded', sans-serif", color: "#FAFAFA" }}
           data-testid="my-applications-title"
         >
-          Moje Aplikacje
+          Moje zgłoszenia
         </h1>
       </div>
 
@@ -85,14 +85,14 @@ export default function MyApplicationsPage() {
         <div className="text-center py-16 rounded-xl bg-[#0F0F13] border border-white/5" data-testid="no-applications">
           <FileText className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
           <p className="text-zinc-400 font-medium" style={{ fontFamily: "'Outfit', sans-serif" }}>
-            Nie masz jeszcze żadnych aplikacji
+            Nie masz jeszcze żadnych zgłoszeń
           </p>
           <Link
             to="/"
             className="text-[#00E5FF] text-sm mt-3 inline-block hover:underline"
             data-testid="browse-recruitments-link"
           >
-            Przeglądaj rekrutacje
+            Przeglądaj panele
           </Link>
         </div>
       ) : (

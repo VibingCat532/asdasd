@@ -215,11 +215,13 @@ export default function RecruitmentDetailPage() {
   if (!recruitment) {
     return (
       <div className="max-w-3xl mx-auto px-4 py-16 text-center">
-        <p className="text-zinc-400 text-lg">Rekrutacja nie znaleziona</p>
+        <p className="text-zinc-400 text-lg">Panel nie znaleziony</p>
         <Link to="/" className="text-[#00E5FF] text-sm mt-4 inline-block hover:underline">Powrót</Link>
       </div>
     );
   }
+
+  const isComplaint = recruitment.category === "complaints";
 
   if (submitted) {
     return (
@@ -231,11 +233,11 @@ export default function RecruitmentDetailPage() {
           className="text-2xl font-bold mb-3"
           style={{ fontFamily: "'Unbounded', sans-serif", color: "#FAFAFA" }}
         >
-          Aplikacja złożona
+          {isComplaint ? "Skarga wysłana" : "Aplikacja złożona"}
         </h2>
         <p className="text-zinc-400 mb-8" style={{ fontFamily: "'Outfit', sans-serif" }}>
-          Twoja aplikacja do rekrutacji <strong className="text-zinc-200">{recruitment.name}</strong> została
-          pomyślnie złożona. Możesz śledzić jej status w zakładce "Moje Aplikacje".
+          {isComplaint ? "Twoja skarga w panelu" : "Twoja aplikacja do rekrutacji"} <strong className="text-zinc-200">{recruitment.name}</strong> została
+          pomyślnie złożona. Możesz śledzić jej status w zakładce "Moje zgłoszenia".
         </p>
         <div className="flex gap-3 justify-center">
           <Link
@@ -243,7 +245,7 @@ export default function RecruitmentDetailPage() {
             className="px-5 py-2.5 rounded-lg text-sm font-semibold bg-[#00E5FF] text-black hover:bg-[#00E5FF]/90 transition-colors"
             data-testid="go-to-my-applications"
           >
-            Moje Aplikacje
+            Moje zgłoszenia
           </Link>
           <Link
             to="/"
@@ -274,7 +276,7 @@ export default function RecruitmentDetailPage() {
         data-testid="back-to-list"
       >
         <ArrowLeft className="w-3.5 h-3.5" />
-        Wszystkie rekrutacje
+        Wszystkie panele
       </Link>
 
       {/* Header */}
@@ -312,8 +314,8 @@ export default function RecruitmentDetailPage() {
       {isClosed && (
         <div className="rounded-xl bg-zinc-900/50 border border-zinc-800/50 p-6 text-center" data-testid="recruitment-closed-notice">
           <Lock className="w-8 h-8 text-zinc-600 mx-auto mb-3" />
-          <p className="text-zinc-400 font-medium" style={{ fontFamily: "'Outfit', sans-serif" }}>Ta rekrutacja jest nieaktywna</p>
-          <p className="text-zinc-600 text-sm mt-1">Nowe aplikacje nie są przyjmowane.</p>
+          <p className="text-zinc-400 font-medium" style={{ fontFamily: "'Outfit', sans-serif" }}>Ten panel jest nieaktywny</p>
+          <p className="text-zinc-600 text-sm mt-1">Nowe zgłoszenia nie są przyjmowane.</p>
         </div>
       )}
 
@@ -321,7 +323,7 @@ export default function RecruitmentDetailPage() {
         <div className="rounded-xl bg-[#5865F2]/5 border border-[#5865F2]/15 p-6 text-center" data-testid="login-prompt">
           <LogIn className="w-8 h-8 text-[#5865F2] mx-auto mb-3" />
           <p className="text-zinc-300 font-medium mb-4" style={{ fontFamily: "'Outfit', sans-serif" }}>
-            Zaloguj się kontem Discord, aby złożyć aplikację
+            Zaloguj się kontem Discord, aby wysłać zgłoszenie
           </p>
           <button
             onClick={login}
@@ -339,9 +341,9 @@ export default function RecruitmentDetailPage() {
         <div className="rounded-xl bg-red-500/5 border border-red-500/15 p-6 text-center" data-testid="blacklisted-notice">
           <Ban className="w-8 h-8 text-red-300 mx-auto mb-3" />
           <p className="text-zinc-300 font-medium" style={{ fontFamily: "'Outfit', sans-serif" }}>
-            Nie mozesz zlozyc podania w tej rekrutacji
+            Nie możesz wysłać zgłoszenia w tym panelu
           </p>
-          <p className="text-zinc-600 text-sm mt-1">Twoje konto jest na blackliscie tej rekrutacji.</p>
+          <p className="text-zinc-600 text-sm mt-1">Twoje konto jest na blackliście tego panelu.</p>
         </div>
       )}
 
@@ -375,7 +377,7 @@ export default function RecruitmentDetailPage() {
           <div className="flex items-center gap-2 mb-2">
             <Send className="w-4 h-4 text-[#00E5FF]" />
             <h2 className="text-lg font-semibold" style={{ fontFamily: "'Outfit', sans-serif", color: "#FAFAFA" }}>
-              Formularz aplikacyjny
+              {isComplaint ? "Formularz skargi" : "Formularz aplikacyjny"}
             </h2>
           </div>
 
@@ -441,7 +443,7 @@ export default function RecruitmentDetailPage() {
               ) : isLastSection ? (
                 <>
                   <Send className="w-4 h-4" />
-                  Zloz aplikacje
+                  {isComplaint ? "Wyślij skargę" : "Złóż aplikację"}
                 </>
               ) : (
                 <>

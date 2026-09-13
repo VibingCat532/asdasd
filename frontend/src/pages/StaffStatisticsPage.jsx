@@ -134,7 +134,7 @@ export default function StaffStatisticsPage() {
               </table>
             </div>}
           </section>
-          <p className="text-xs text-zinc-500 leading-relaxed">Sprawdzone = zaakceptowane + odrzucone. Każde zgłoszenie liczymy raz, według aktualnej decyzji i osoby, która ją podjęła. Zmiana decyzji przenosi wynik do ostatniego sprawdzającego, a ponowne otwarcie usuwa go z rozpatrzonych. Starsze decyzje bez zapisanej osoby trafiają do wiersza „Nieznany sprawdzający”. Usunięte zgłoszenia nie są uwzględniane.</p>
+          <p className="text-xs text-zinc-500 leading-relaxed">Sprawdzone = zaakceptowane + odrzucone.</p>
         </div>}
     </div>
   );

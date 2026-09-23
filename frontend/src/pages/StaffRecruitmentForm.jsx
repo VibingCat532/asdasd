@@ -42,7 +42,28 @@ const CATEGORIES = [
   { value: "complaints", label: "Skargi" },
 ];
 
-const DEFAULT_ACCESS = { can_edit_questions: false, can_review_applications: true, can_view_statistics: false };
+const DEFAULT_ACCESS = { can_edit_questions: false, can_review_applications: true, can_view_statistics: false, can_delete_applications: false, can_all: false };
+const ACCESS_OPTIONS = [
+  ["can_edit_questions", "Może edytować pytania"],
+  ["can_review_applications", "Może sprawdzać zgłoszenia"],
+  ["can_view_statistics", "Może przeglądać statystyki"],
+  ["can_delete_applications", "Może usuwać podania"],
+  ["can_all", "ALL"],
+];
+
+function AccessOptions({ access, canGrantAll, onChange }) {
+  return ACCESS_OPTIONS.map(([key, label]) => (
+    <label key={key} className="flex items-center gap-2 text-xs text-zinc-400">
+      <Checkbox
+        checked={!!access[key] || (key !== "can_all" && !!access.can_all)}
+        disabled={key === "can_all" ? !canGrantAll : !!access.can_all}
+        onCheckedChange={value => onChange({ [key]: !!value })}
+        className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
+      />
+      {label}
+    </label>
+  ));
+}
 const DEFAULT_SECTION_TITLE = "Ogólne";
 
 function normalizeSectionTitle(title) {
@@ -94,6 +115,7 @@ export default function StaffRecruitmentForm() {
     canEditQuestions: !isEdit,
     canReviewApplications: !isEdit,
     canManageAccess: !isEdit,
+    canGrantAll: false,
   });
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -116,6 +138,7 @@ export default function StaffRecruitmentForm() {
         canEditQuestions: !!d.can_edit_questions,
         canReviewApplications: !!d.can_review_applications,
         canManageAccess: !!d.can_manage_access,
+        canGrantAll: !!d.can_grant_all,
       });
       if (d.can_edit_recruitment) {
         setActiveTab("basic");
@@ -149,10 +172,10 @@ export default function StaffRecruitmentForm() {
 
   const fetchUsers = useCallback(async () => {
     try {
-      const res = await axios.get(`${API}/staff/users${searchQ ? `?q=${encodeURIComponent(searchQ)}` : ""}`, { withCredentials: true });
+      const res = await axios.get(`${API}/staff/users`, { params: { recruitment_id: id, q: searchQ }, withCredentials: true });
       setAllUsers(res.data);
     } catch {}
-  }, [searchQ]);
+  }, [id, searchQ]);
 
   useEffect(() => { fetchRecruitment(); }, [fetchRecruitment]);
   useEffect(() => { if (isEdit && permissions.canManageAccess) fetchAccess(); }, [isEdit, permissions.canManageAccess, fetchAccess]);
@@ -300,7 +323,7 @@ export default function StaffRecruitmentForm() {
 
   const addAccess = async (userId) => {
     const access = getPendingAccess(userId);
-    if (!access.can_edit_questions && !access.can_review_applications && !access.can_view_statistics) {
+    if (!ACCESS_OPTIONS.some(([key]) => access[key])) {
       setErrors(["Wybierz przynajmniej jedna permisje"]);
       return;
     }
@@ -311,6 +334,8 @@ export default function StaffRecruitmentForm() {
         can_edit_questions: !!access.can_edit_questions,
         can_review_applications: !!access.can_review_applications,
         can_view_statistics: !!access.can_view_statistics,
+        can_delete_applications: !!access.can_delete_applications,
+        can_all: !!access.can_all,
       }, { withCredentials: true });
       setPendingAccess(prev => {
         const next = { ...prev };
@@ -325,7 +350,7 @@ export default function StaffRecruitmentForm() {
 
   const updateAccess = async (accessUser, patch) => {
     const next = { ...accessUser, ...patch };
-    if (!next.can_edit_questions && !next.can_review_applications && !next.can_view_statistics) {
+    if (!ACCESS_OPTIONS.some(([key]) => next[key])) {
       setErrors(["Uzytkownik musi miec przynajmniej jedna permisje"]);
       return;
     }
@@ -335,6 +360,8 @@ export default function StaffRecruitmentForm() {
         can_edit_questions: !!next.can_edit_questions,
         can_review_applications: !!next.can_review_applications,
         can_view_statistics: !!next.can_view_statistics,
+        can_delete_applications: !!next.can_delete_applications,
+        can_all: !!next.can_all,
       }, { withCredentials: true });
       setAccessUsers(prev => prev.map(u => u.id === accessUser.id ? next : u));
     } catch (err) {
@@ -748,6 +775,11 @@ export default function StaffRecruitmentForm() {
         {/* Access Tab */}
         {showAccessTab && (
           <TabsContent value="access" className="space-y-4">
+            <p className="text-xs text-zinc-400">
+              ALL pozwala zarządzać tą rekrutacją, pytaniami, podaniami, statystykami i dostępem.
+              Tylko twórca rekrutacji i management mogą nadawać lub odbierać ALL.
+              Usuwanie podań daje też wgląd w ich treść; sprawdzanie zgłoszeń jest osobnym uprawnieniem.
+            </p>
             <div>
               <Label className="text-zinc-300 mb-1.5 block text-sm">Dodaj uzytkownika</Label>
               <Input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Szukaj po nazwie Discord..."
@@ -768,30 +800,7 @@ export default function StaffRecruitmentForm() {
                           <p className="text-sm text-zinc-200 truncate">{u.discord_global_name || u.discord_username}</p>
                           <p className="text-xs text-zinc-500">@{u.discord_username}</p>
                           <div className="flex flex-wrap gap-4 mt-2">
-                            <label className="flex items-center gap-2 text-xs text-zinc-400">
-                              <Checkbox
-                                checked={!!selected.can_edit_questions}
-                                onCheckedChange={v => updatePendingAccess(u.id, { can_edit_questions: !!v })}
-                                className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
-                              />
-                              Może edytować pytania
-                            </label>
-                            <label className="flex items-center gap-2 text-xs text-zinc-400">
-                              <Checkbox
-                                checked={!!selected.can_review_applications}
-                                onCheckedChange={v => updatePendingAccess(u.id, { can_review_applications: !!v })}
-                                className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
-                              />
-                              Może sprawdzać zgłoszenia
-                            </label>
-                          <label className="flex items-center gap-2 text-xs text-zinc-400">
-                              <Checkbox
-                                checked={!!selected.can_view_statistics}
-                                onCheckedChange={v => updatePendingAccess(u.id, { can_view_statistics: !!v })}
-                                className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
-                              />
-                              Może przeglądać statystyki
-                            </label>
+                            <AccessOptions access={selected} canGrantAll={permissions.canGrantAll} onChange={patch => updatePendingAccess(u.id, patch)} />
                           </div>
                         </div>
                         <button onClick={() => addAccess(u.id)}
@@ -823,33 +832,10 @@ export default function StaffRecruitmentForm() {
                         <p className="text-sm text-zinc-200 truncate">{u.discord_global_name || u.discord_username}</p>
                         <p className="text-xs text-zinc-500">@{u.discord_username}</p>
                         <div className="flex flex-wrap gap-4 mt-2">
-                          <label className="flex items-center gap-2 text-xs text-zinc-400">
-                            <Checkbox
-                              checked={!!u.can_edit_questions}
-                              onCheckedChange={v => updateAccess(u, { can_edit_questions: !!v })}
-                              className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
-                            />
-                            Może edytować pytania
-                          </label>
-                          <label className="flex items-center gap-2 text-xs text-zinc-400">
-                            <Checkbox
-                              checked={!!u.can_review_applications}
-                              onCheckedChange={v => updateAccess(u, { can_review_applications: !!v })}
-                              className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
-                            />
-                            Może sprawdzać zgłoszenia
-                          </label>
-                          <label className="flex items-center gap-2 text-xs text-zinc-400">
-                            <Checkbox
-                              checked={!!u.can_view_statistics}
-                              onCheckedChange={v => updateAccess(u, { can_view_statistics: !!v })}
-                              className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
-                            />
-                            Może przeglądać statystyki
-                          </label>
+                          <AccessOptions access={u} canGrantAll={permissions.canGrantAll} onChange={patch => updateAccess(u, patch)} />
                         </div>
                       </div>
-                      <button onClick={() => removeAccess(u.id)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors" data-testid={"remove-user-" + u.discord_username}>
+                      <button disabled={u.can_all && !permissions.canGrantAll} onClick={() => removeAccess(u.id)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" data-testid={"remove-user-" + u.discord_username}>
                         <X className="w-4 h-4" />
                       </button>
                     </div>

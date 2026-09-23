@@ -6,7 +6,7 @@ const { PGlite } = require('@electric-sql/pglite');
 const express = require('express');
 
 let db, server, base;
-let owner, reviewer, analyst, applicant, recruitment, complaint;
+let owner, reviewer, analyst, applicant, manager, recruitment, complaint;
 let discordCalls = 0;
 
 function stub(modulePath, exports) {
@@ -34,11 +34,11 @@ before(async () => {
   await db.exec(schema);
   await db.exec(schema); // Migration remains safe on existing databases.
   const ids = [];
-  for (const name of ['owner', 'reviewer', 'analyst', 'applicant']) {
+  for (const name of ['owner', 'reviewer', 'analyst', 'applicant', 'manager']) {
     const { rows } = await db.query('INSERT INTO users (discord_id, discord_username) VALUES ($1, $1) RETURNING id', [name]);
     ids.push(rows[0].id);
   }
-  [owner, reviewer, analyst, applicant] = ids;
+  [owner, reviewer, analyst, applicant, manager] = ids;
   stub('../src/db', { query: (sql, values) => db.query(sql, values) });
   stub('../src/utils/auth', {
     requireAuth(req, res, next) { req.userId = req.get('x-test-user'); return req.userId ? next() : res.status(401).json({ error: 'Login required' }); },
@@ -46,7 +46,7 @@ before(async () => {
   });
   stub('../src/utils/roles', {
     GUILD_ID: 'test-guild',
-    resolveUserCapabilities: async discordId => ({ is_management: false, is_opiekun: discordId === 'owner', is_staff: discordId === 'owner' }),
+    resolveUserCapabilities: async discordId => ({ is_management: discordId === 'manager', is_opiekun: discordId === 'owner', is_staff: ['owner', 'manager'].includes(discordId) }),
   });
   const sideEffect = async () => { discordCalls++; return true; };
   stub('../src/utils/discord', { addGuildMember: sideEffect, addGuildMemberRole: sideEffect, sendDiscordDirectMessage: sideEffect });
@@ -73,10 +73,10 @@ after(async () => {
   if (db) await db.close();
 });
 
-test('all eight combinations keep editing, reviewing and statistics independent', async () => {
-  const application = await addApplication(recruitment);
-  for (let mask = 0; mask < 8; mask++) {
-    const permissions = { can_edit_questions: !!(mask & 1), can_review_applications: !!(mask & 2), can_view_statistics: !!(mask & 4) };
+test('all sixteen combinations keep editing, reviewing, statistics and deletion independent', async () => {
+  for (let mask = 0; mask < 16; mask++) {
+    const application = await addApplication(recruitment);
+    const permissions = { can_edit_questions: !!(mask & 1), can_review_applications: !!(mask & 2), can_view_statistics: !!(mask & 4), can_delete_applications: !!(mask & 8) };
     await db.query('DELETE FROM recruitment_access WHERE user_id = $1', [analyst]);
     const grant = await request(`/staff/recruitments/${recruitment}/access`, { method: 'POST', body: { user_id: analyst, ...permissions } });
     assert.equal(grant.status, mask ? 201 : 422);
@@ -84,7 +84,12 @@ test('all eight combinations keep editing, reviewing and statistics independent'
     const stats = await request(`/staff/recruitments/${recruitment}/statistics`, options);
     assert.equal(stats.status, mask & 4 ? 200 : 403, `statistics mask ${mask}`);
     for (const suffix of ['applications', `applications/${application}`]) {
-      assert.equal((await request(`/staff/recruitments/${recruitment}/${suffix}`, options)).status, mask & 2 ? 200 : 403, `${suffix} mask ${mask}`);
+      assert.equal((await request(`/staff/recruitments/${recruitment}/${suffix}`, options)).status, mask & 10 ? 200 : 403, `${suffix} mask ${mask}`);
+    }
+    if (mask & 10) {
+      const detail = await request(`/staff/recruitments/${recruitment}/applications/${application}`, options);
+      assert.equal(detail.data.can_delete_application, !!(mask & 8));
+      assert.equal(detail.data.can_review_applications, !!(mask & 2));
     }
     assert.equal((await request(`/staff/recruitments/${recruitment}/applications/${application}/status`, { ...options, method: 'PATCH', body: { status: 'nowe' } })).status, mask & 2 ? 200 : 403);
     assert.equal((await request(`/staff/recruitments/${recruitment}/questions`, { ...options, method: 'PUT', body: { questions: [] } })).status, mask & 1 ? 200 : 403);
@@ -95,8 +100,11 @@ test('all eight combinations keep editing, reviewing and statistics independent'
       const panel = dashboard.data.find(r => r.id === recruitment);
       for (const [key, value] of Object.entries(permissions)) assert.equal(panel[key], value, `dashboard ${key} mask ${mask}`);
     }
+    const deleted = await request(`/staff/recruitments/${recruitment}/applications/${application}`, { ...options, method: 'DELETE' });
+    assert.equal(deleted.status, mask & 8 ? 200 : 403, `delete mask ${mask}`);
+    assert.equal((await db.query('SELECT id FROM applications WHERE id = $1', [application])).rows.length, mask & 8 ? 0 : 1);
+    await db.query('DELETE FROM applications WHERE id = $1', [application]);
   }
-  await db.query('DELETE FROM applications WHERE id = $1', [application]);
 });
 
 test('a grant can be changed to statistics only and revoked', async () => {
@@ -182,4 +190,83 @@ test('closed and blacklisted complaint panels reject submissions; recruitment du
   assert.equal((await request(`/recruitments/${complaint}`, { user: applicant })).data.user_can_apply, false);
   assert.equal((await request(`/recruitments/${recruitment}/apply`, { user: applicant, method: 'POST', body: { answers: {} } })).status, 409);
   assert.equal((await request(`/staff/recruitments/${recruitment}/statistics`, { user: null })).status, 401);
+});
+const NO_ACCESS = { can_edit_questions: false, can_review_applications: false, can_view_statistics: false, can_delete_applications: false, can_all: false };
+
+test('ALL manages only its recruitment and cannot grant, overwrite or revoke ALL', async () => {
+  const route = `/staff/recruitments/${recruitment}`;
+  const grant = await request(`${route}/access`, { method: 'POST', body: { user_id: analyst, ...NO_ACCESS, can_all: true } });
+  assert.equal(grant.status, 201);
+  const options = { user: analyst };
+  const detail = (await request(route, options)).data;
+  for (const key of ['can_edit_recruitment', 'can_edit_questions', 'can_review_applications', 'can_view_statistics', 'can_delete_applications', 'can_manage_access']) assert.equal(detail[key], true, key);
+  assert.equal(detail.can_grant_all, false);
+  assert.equal(detail.can_delete_recruitment, false);
+  assert.equal(detail.permission_level, 'all');
+  const dashboard = (await request('/staff/recruitments', options)).data.find(r => r.id === recruitment);
+  for (const key of ['can_update_status', 'can_edit_questions', 'can_review_applications', 'can_view_statistics', 'can_delete_applications', 'can_manage_access']) assert.equal(dashboard[key], true, key);
+  assert.equal(dashboard.can_grant_all, false);
+  assert.equal((await request(`${route}/statistics`, options)).status, 200);
+  assert.equal((await request(`${route}/blacklist`, options)).status, 200);
+  assert.equal((await request(`${route}/questions`, { ...options, method: 'PUT', body: { questions: [] } })).status, 200);
+  assert.equal((await request(`${route}/status`, { ...options, method: 'PATCH', body: { status: 'active' } })).status, 200);
+  assert.equal((await request(route, { ...options, method: 'PATCH', body: { description: 'Managed by ALL' } })).status, 200);
+  assert.equal((await request(`/staff/users?recruitment_id=${recruitment}&q=reviewer`, options)).data[0].id, reviewer);
+  assert.equal((await request(`/staff/users?recruitment_id=${complaint}`, options)).status, 403);
+  assert.equal((await request(`${route}/access`, options)).status, 200);
+
+  // Delegate every ordinary permission, change it, and revoke it.
+  const ordinary = { ...NO_ACCESS, can_edit_questions: true, can_review_applications: true, can_view_statistics: true, can_delete_applications: true };
+  assert.equal((await request(`${route}/access`, { ...options, method: 'POST', body: { user_id: reviewer, ...ordinary } })).status, 201);
+  assert.equal((await request(`${route}/access/${reviewer}`, { ...options, method: 'PATCH', body: { ...NO_ACCESS, can_delete_applications: true } })).status, 200);
+  for (const method of ['POST', 'PATCH']) {
+    const endpoint = method === 'POST' ? `${route}/access` : `${route}/access/${reviewer}`;
+    assert.equal((await request(endpoint, { ...options, method, body: { user_id: reviewer, can_all: true } })).status, 403);
+  }
+  assert.equal((await request(`${route}/access/${reviewer}`, { ...options, method: 'DELETE' })).status, 200);
+  assert.equal((await request(`${route}/access`, { ...options, method: 'POST', body: { user_id: reviewer, can_all: true } })).status, 403);
+  assert.equal((await db.query('SELECT id FROM recruitment_access WHERE recruitment_id = $1 AND user_id = $2', [recruitment, reviewer])).rows.length, 0);
+
+  // Protect existing ALL grants through every mutation endpoint (including upsert).
+  await request(`${route}/access`, { method: 'POST', body: { user_id: reviewer, ...NO_ACCESS, can_all: true } });
+  for (const target of [reviewer, analyst]) {
+    assert.equal((await request(`${route}/access`, { ...options, method: 'POST', body: { user_id: target, ...ordinary } })).status, 403);
+    assert.equal((await request(`${route}/access/${target}`, { ...options, method: 'PATCH', body: ordinary })).status, 403);
+    assert.equal((await request(`${route}/access/${target}`, { ...options, method: 'DELETE' })).status, 403);
+    assert.equal((await db.query('SELECT can_all FROM recruitment_access WHERE recruitment_id = $1 AND user_id = $2', [recruitment, target])).rows[0].can_all, true);
+  }
+
+  const application = await addApplication(recruitment);
+  const applicationRoute = `${route}/applications/${application}`;
+  assert.equal((await request(applicationRoute, options)).data.can_delete_application, true);
+  assert.equal((await request(`${applicationRoute}/status`, { ...options, method: 'PATCH', body: { status: 'odrzucone' } })).status, 200);
+  assert.equal((await request(applicationRoute, { ...options, method: 'DELETE' })).status, 200);
+  const otherApplication = await addApplication(complaint);
+  assert.equal((await request(`${route}/applications/${otherApplication}`, { ...options, method: 'DELETE' })).status, 404);
+  assert.equal((await request(`/staff/recruitments/${complaint}/applications/${otherApplication}`, { ...options, method: 'DELETE' })).status, 403);
+  assert.equal((await db.query('SELECT id FROM applications WHERE id = $1', [otherApplication])).rows.length, 1);
+  assert.equal((await request(`/staff/recruitments/${complaint}/access`, { ...options, method: 'POST', body: { user_id: reviewer, can_review_applications: true } })).status, 403);
+  assert.equal((await request(route, { ...options, method: 'DELETE' })).status, 403);
+
+  // The owner can revoke ALL and the very next request loses access.
+  assert.equal((await request(`${route}/access/${analyst}`, { method: 'DELETE' })).status, 200);
+  assert.equal((await request(`${route}/access`, options)).status, 403);
+  assert.equal((await request(`${route}/access/${reviewer}`, { method: 'PATCH', body: { ...NO_ACCESS, can_delete_applications: true } })).status, 200);
+  assert.equal((await request(route, { user: reviewer })).data.can_manage_access, false);
+  assert.equal((await request(`${route}/access/${reviewer}`, { method: 'DELETE' })).status, 200);
+});
+
+test('management can grant and revoke ALL without owning the recruitment', async () => {
+  const route = `/staff/recruitments/${recruitment}`;
+  const options = { user: manager };
+  assert.equal((await request(route, options)).data.can_grant_all, true);
+  const dashboard = (await request('/staff/recruitments', options)).data.find(r => r.id === recruitment);
+  assert.equal(dashboard.can_grant_all, true);
+  assert.equal(dashboard.can_delete_applications, true);
+  assert.equal((await request(`${route}/access`, { ...options, method: 'POST', body: { user_id: analyst, ...NO_ACCESS, can_all: true } })).status, 201);
+  assert.equal((await request(`${route}/access/${analyst}`, { ...options, method: 'PATCH', body: { ...NO_ACCESS, can_review_applications: true } })).status, 200);
+  assert.equal((await request(`${route}/access/${analyst}`, { ...options, method: 'PATCH', body: { ...NO_ACCESS, can_all: true } })).status, 200);
+  assert.equal((await request(`${route}/access/${analyst}`, { ...options, method: 'DELETE' })).status, 200);
+  const application = await addApplication(recruitment);
+  assert.equal((await request(`${route}/applications/${application}`, { ...options, method: 'DELETE' })).status, 200);
 });

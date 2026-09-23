@@ -194,12 +194,12 @@ export default function StaffDashboard() {
                   </Badge>
                   <Badge
                     className={
-                      rec.permission_level === "full"
+                      ["full", "all"].includes(rec.permission_level)
                         ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-mono uppercase"
                         : "bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs font-mono uppercase"
                     }
                   >
-                    {{ full: "pełny", editor: "edytor", reviewer: "recenzent", statistics: "statystyki" }[rec.permission_level]}
+                    {{ full: "pełny", all: "ALL", editor: "edytor", reviewer: "recenzent", deleter: "usuwanie podań", statistics: "statystyki" }[rec.permission_level]}
                   </Badge>
                 </div>
               </div>
@@ -230,7 +230,7 @@ export default function StaffDashboard() {
               )}
 
               <div className="flex flex-wrap gap-2">
-                {rec.can_review_applications && <Link
+                {(rec.can_review_applications || rec.can_delete_applications) && <Link
                   to={`/staff/recruitments/${rec.id}/applications`}
                   className="flex-1 text-center px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-zinc-300 hover:bg-white/10 transition-colors"
                   data-testid={`review-apps-${rec.slug}`}

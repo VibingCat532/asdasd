@@ -170,6 +170,8 @@ async function getRecruitmentPermission(staffUser, recruitmentId) {
       canReviewApplications: true,
       canViewStatistics: true,
       canManageAccess: true,
+      canGrantAll: true,
+      canDeleteApplications: true,
       permissionLevel: 'full',
       capabilities,
     };
@@ -193,13 +195,15 @@ async function getRecruitmentPermission(staffUser, recruitmentId) {
       canReviewApplications: true,
       canViewStatistics: true,
       canManageAccess: true,
+      canGrantAll: true,
+      canDeleteApplications: true,
       permissionLevel: 'full',
       capabilities,
     };
   }
 
   const accessResult = await query(
-    `SELECT can_edit_questions, can_review_applications, can_view_statistics
+    `SELECT can_edit_questions, can_review_applications, can_view_statistics, can_delete_applications, can_all
      FROM recruitment_access
      WHERE recruitment_id = $1 AND user_id = $2`,
     [recruitmentId, staffUser.userId]
@@ -208,13 +212,15 @@ async function getRecruitmentPermission(staffUser, recruitmentId) {
   if (accessResult.rows.length > 0) {
     const access = accessResult.rows[0];
     return {
-      hasAccess: access.can_edit_questions || access.can_review_applications || access.can_view_statistics,
-      canEditRecruitment: false,
-      canEditQuestions: access.can_edit_questions,
-      canReviewApplications: access.can_review_applications,
-      canViewStatistics: access.can_view_statistics,
-      canManageAccess: false,
-      permissionLevel: access.can_edit_questions ? 'editor' : access.can_review_applications ? 'reviewer' : 'statistics',
+      hasAccess: access.can_all || access.can_edit_questions || access.can_review_applications || access.can_view_statistics || access.can_delete_applications,
+      canEditRecruitment: access.can_all,
+      canEditQuestions: access.can_all || access.can_edit_questions,
+      canReviewApplications: access.can_all || access.can_review_applications,
+      canViewStatistics: access.can_all || access.can_view_statistics,
+      canManageAccess: access.can_all,
+      canGrantAll: false,
+      canDeleteApplications: access.can_all || access.can_delete_applications,
+      permissionLevel: access.can_all ? 'all' : access.can_edit_questions ? 'editor' : access.can_review_applications ? 'reviewer' : access.can_delete_applications ? 'deleter' : 'statistics',
       capabilities,
     };
   }
@@ -399,7 +405,7 @@ router.get('/recruitments', requireAuth, async (req, res) => {
     } else {
       result = await query(
         `SELECT r.id, r.name, r.slug, r.status, r.theme_color, r.category, r.scope, r.creator_id, r.created_at,
-                ra.can_edit_questions, ra.can_review_applications, ra.can_view_statistics,
+                ra.can_edit_questions, ra.can_review_applications, ra.can_view_statistics, ra.can_delete_applications, ra.can_all,
                 COUNT(DISTINCT a.id) as app_count,
                 COUNT(DISTINCT CASE WHEN a.status = 'nowe' THEN a.id END) as pending_count
          FROM recruitments r
@@ -407,7 +413,7 @@ router.get('/recruitments', requireAuth, async (req, res) => {
          LEFT JOIN recruitment_access ra ON ra.recruitment_id = r.id AND ra.user_id = $1
          WHERE r.creator_id = $1
             OR r.id IN (SELECT recruitment_id FROM recruitment_access WHERE user_id = $1)
-         GROUP BY r.id, ra.can_edit_questions, ra.can_review_applications, ra.can_view_statistics
+         GROUP BY r.id, ra.can_edit_questions, ra.can_review_applications, ra.can_view_statistics, ra.can_delete_applications, ra.can_all
          ORDER BY r.created_at DESC`,
         [staffUser.userId]
       );
@@ -419,10 +425,14 @@ router.get('/recruitments', requireAuth, async (req, res) => {
         permissionLevel = 'full';
       } else if (r.creator_id && r.creator_id === staffUser.userId) {
         permissionLevel = 'full';
+      } else if (r.can_all) {
+        permissionLevel = 'all';
       } else if (r.can_edit_questions) {
         permissionLevel = 'editor';
       } else if (r.can_review_applications) {
         permissionLevel = 'reviewer';
+      } else if (r.can_delete_applications) {
+        permissionLevel = 'deleter';
       } else {
         permissionLevel = 'statistics';
       }
@@ -436,10 +446,13 @@ router.get('/recruitments', requireAuth, async (req, res) => {
         category: r.category || 'general',
         scope: r.scope,
         permission_level: permissionLevel,
-        can_view_statistics: permissionLevel === 'full' || !!r.can_view_statistics,
-        can_update_status: permissionLevel === 'full',
-        can_edit_questions: permissionLevel === 'full' || !!r.can_edit_questions,
-        can_review_applications: permissionLevel === 'full' || !!r.can_review_applications,
+        can_view_statistics: permissionLevel === 'full' || !!r.can_all || !!r.can_view_statistics,
+        can_update_status: permissionLevel === 'full' || !!r.can_all,
+        can_delete_applications: permissionLevel === 'full' || !!r.can_all || !!r.can_delete_applications,
+        can_manage_access: permissionLevel === 'full' || !!r.can_all,
+        can_grant_all: permissionLevel === 'full',
+        can_edit_questions: permissionLevel === 'full' || !!r.can_all || !!r.can_edit_questions,
+        can_review_applications: permissionLevel === 'full' || !!r.can_all || !!r.can_review_applications,
         app_count: parseInt(r.app_count, 10),
         pending_count: parseInt(r.pending_count, 10),
         created_at: r.created_at.toISOString(),
@@ -724,7 +737,10 @@ router.get('/users', requireAuth, async (req, res) => {
     }
 
     const capabilities = await resolveUserCapabilities(staffUser.discordId, staffUser.userId);
-    if (!capabilities.is_staff) {
+    const access = req.query.recruitment_id
+      ? await getRecruitmentPermission(staffUser, req.query.recruitment_id)
+      : null;
+    if (access ? !access.canManageAccess : !capabilities.is_staff) {
       return res.status(403).json({ error: 'Brak uprawnien' });
     }
 
@@ -767,7 +783,7 @@ router.get('/recruitments/:recruitmentId/access', requireAuth, async (req, res) 
 
     const result = await query(
       `SELECT u.id, u.discord_id, u.discord_username, u.discord_avatar, u.discord_global_name,
-              ra.can_edit_questions, ra.can_review_applications, ra.can_view_statistics
+              ra.can_edit_questions, ra.can_review_applications, ra.can_view_statistics, ra.can_delete_applications, ra.can_all
        FROM recruitment_access ra
        JOIN users u ON u.id = ra.user_id
        WHERE ra.recruitment_id = $1
@@ -790,27 +806,39 @@ router.post('/recruitments/:recruitmentId/access', requireAuth, async (req, res)
     }
 
     const { recruitmentId } = req.params;
-    const { user_id, can_edit_questions = false, can_review_applications = true, can_view_statistics = false } = req.body;
+    const { user_id, can_edit_questions = false, can_review_applications = true, can_view_statistics = false, can_delete_applications = false, can_all = false } = req.body;
     const canEditQuestions = can_edit_questions === true;
     const canReviewApplications = can_review_applications === true;
     const canViewStatistics = can_view_statistics === true;
+    const canDeleteApplications = can_delete_applications === true;
+    const canAll = can_all === true;
     const permission = await getRecruitmentPermission(staffUser, recruitmentId);
     if (!permission.canManageAccess) {
       return res.status(403).json({ error: 'Brak uprawnien do zarzadzania dostepem' });
     }
-    if (!canEditQuestions && !canReviewApplications && !canViewStatistics) {
+    if (canAll && !permission.canGrantAll) {
+      return res.status(403).json({ error: 'Tylko twórca rekrutacji i management mogą nadawać ALL' });
+    }
+    if (!canEditQuestions && !canReviewApplications && !canViewStatistics && !canDeleteApplications && !canAll) {
       return res.status(422).json({ error: 'Wybierz przynajmniej jedna permisje' });
     }
 
-    await query(
-      `INSERT INTO recruitment_access (recruitment_id, user_id, can_edit_questions, can_review_applications, can_view_statistics)
-       VALUES ($1, $2, $3, $4, $5)
+    const result = await query(
+      `INSERT INTO recruitment_access (recruitment_id, user_id, can_edit_questions, can_review_applications, can_view_statistics, can_delete_applications, can_all)
+       VALUES ($1, $2, $3, $4, $5, $6, $7)
        ON CONFLICT (recruitment_id, user_id) DO UPDATE SET
          can_edit_questions = EXCLUDED.can_edit_questions,
          can_review_applications = EXCLUDED.can_review_applications,
-         can_view_statistics = EXCLUDED.can_view_statistics`,
-      [recruitmentId, user_id, canEditQuestions, canReviewApplications, canViewStatistics]
+         can_view_statistics = EXCLUDED.can_view_statistics,
+         can_delete_applications = EXCLUDED.can_delete_applications,
+         can_all = EXCLUDED.can_all
+       WHERE $8::boolean OR NOT recruitment_access.can_all
+       RETURNING id`,
+      [recruitmentId, user_id, canEditQuestions, canReviewApplications, canViewStatistics, canDeleteApplications, canAll, !!permission.canGrantAll]
     );
+    if (!result.rows.length) {
+      return res.status(403).json({ error: 'Nie możesz zmieniać dostępu osoby z ALL' });
+    }
 
     res.status(201).json({ success: true });
   } catch (err) {
@@ -827,24 +855,35 @@ router.patch('/recruitments/:recruitmentId/access/:userId', requireAuth, async (
     }
 
     const { recruitmentId, userId } = req.params;
-    const { can_edit_questions = false, can_review_applications = true, can_view_statistics = false } = req.body;
+    const { can_edit_questions = false, can_review_applications = true, can_view_statistics = false, can_delete_applications = false, can_all = false } = req.body;
     const canEditQuestions = can_edit_questions === true;
     const canReviewApplications = can_review_applications === true;
     const canViewStatistics = can_view_statistics === true;
+    const canDeleteApplications = can_delete_applications === true;
+    const canAll = can_all === true;
     const permission = await getRecruitmentPermission(staffUser, recruitmentId);
     if (!permission.canManageAccess) {
       return res.status(403).json({ error: 'Brak uprawnien do zarzadzania dostepem' });
     }
-    if (!canEditQuestions && !canReviewApplications && !canViewStatistics) {
+    if (canAll && !permission.canGrantAll) {
+      return res.status(403).json({ error: 'Tylko twórca rekrutacji i management mogą nadawać ALL' });
+    }
+    if (!canEditQuestions && !canReviewApplications && !canViewStatistics && !canDeleteApplications && !canAll) {
       return res.status(422).json({ error: 'Wybierz przynajmniej jedna permisje' });
     }
 
-    await query(
+    const result = await query(
       `UPDATE recruitment_access
-       SET can_edit_questions = $1, can_review_applications = $2, can_view_statistics = $3
-       WHERE recruitment_id = $4 AND user_id = $5`,
-      [canEditQuestions, canReviewApplications, canViewStatistics, recruitmentId, userId]
+       SET can_edit_questions = $1, can_review_applications = $2, can_view_statistics = $3,
+           can_delete_applications = $4, can_all = $5
+       WHERE recruitment_id = $6 AND user_id = $7
+         AND ($8::boolean OR NOT can_all)
+       RETURNING id`,
+      [canEditQuestions, canReviewApplications, canViewStatistics, canDeleteApplications, canAll, recruitmentId, userId, !!permission.canGrantAll]
     );
+    if (!result.rows.length) {
+      return res.status(403).json({ error: 'Brak dostępu lub nie możesz zmieniać dostępu osoby z ALL' });
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -866,10 +905,14 @@ router.delete('/recruitments/:recruitmentId/access/:userId', requireAuth, async 
       return res.status(403).json({ error: 'Brak uprawnien do zarzadzania dostepem' });
     }
 
-    await query(
-      'DELETE FROM recruitment_access WHERE recruitment_id = $1 AND user_id = $2',
-      [recruitmentId, userId]
+    const result = await query(
+      `DELETE FROM recruitment_access WHERE recruitment_id = $1 AND user_id = $2
+       AND ($3::boolean OR NOT can_all) RETURNING id`,
+      [recruitmentId, userId, !!permission.canGrantAll]
     );
+    if (!result.rows.length) {
+      return res.status(403).json({ error: 'Brak dostępu lub nie możesz usuwać dostępu osoby z ALL' });
+    }
 
     res.json({ success: true });
   } catch (err) {
@@ -1035,6 +1078,8 @@ router.get('/recruitments/:recruitmentId', requireAuth, async (req, res) => {
       can_review_applications: permission.canReviewApplications,
       can_view_statistics: permission.canViewStatistics,
       can_manage_access: permission.canManageAccess,
+      can_grant_all: permission.canGrantAll,
+      can_delete_applications: permission.canDeleteApplications,
       can_delete_recruitment: permission.capabilities?.is_management === true,
       questions: questionsResult.rows.map(q => ({
         id: q.id,
@@ -1292,7 +1337,7 @@ router.get('/recruitments/:recruitmentId/applications', requireAuth, async (req,
 
     const { recruitmentId } = req.params;
     const permission = await getRecruitmentPermission(staffUser, recruitmentId);
-    if (!permission.canReviewApplications) {
+    if (!permission.canReviewApplications && !permission.canDeleteApplications) {
       return res.status(403).json({ error: 'Brak uprawnien do sprawdzania aplikacji' });
     }
 
@@ -1332,12 +1377,11 @@ router.delete('/recruitments/:recruitmentId/applications/:applicationId', requir
       return res.status(401).json({ error: 'Uzytkownik nie znaleziony' });
     }
 
-    const capabilities = await resolveUserCapabilities(staffUser.discordId, staffUser.userId);
-    if (!capabilities.is_management) {
+    const { recruitmentId, applicationId } = req.params;
+    const permission = await getRecruitmentPermission(staffUser, recruitmentId);
+    if (!permission.canDeleteApplications) {
       return res.status(403).json({ error: 'Brak uprawnien do usuniecia podania' });
     }
-
-    const { recruitmentId, applicationId } = req.params;
     const result = await query(
       `DELETE FROM applications
        WHERE id = $1 AND recruitment_id = $2
@@ -1449,7 +1493,7 @@ router.get('/recruitments/:recruitmentId/applications/:applicationId', requireAu
 
     // Check access and permissions
     const permission = await getRecruitmentPermission(staffUser, recruitmentId);
-    if (!permission.canReviewApplications) {
+    if (!permission.canReviewApplications && !permission.canDeleteApplications) {
       return res.status(403).json({ error: 'Brak dostępu do tej rekrutacji' });
     }
 
@@ -1504,7 +1548,8 @@ router.get('/recruitments/:recruitmentId/applications/:applicationId', requireAu
       })),
       created_at: application.created_at.toISOString(),
       reviewer_name: application.reviewer_name || null,
-      can_delete_application: permission.capabilities?.is_management === true,
+      can_delete_application: !!permission.canDeleteApplications,
+      can_review_applications: !!permission.canReviewApplications,
     });
   } catch (err) {
     logger.error('Failed to get application details', err);

@@ -166,7 +166,7 @@ export default function StaffApplicationDetailPage() {
         </div>
 
         {/* Status change actions */}
-        {app.status === "nowe" && (
+        {app.can_review_applications && app.status === "nowe" && (
           <div className="flex gap-3 mt-5 pt-4 border-t border-white/5">
             <button onClick={() => changeStatus("zaakceptowane")} disabled={changing}
               className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-semibold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 hover:bg-emerald-500/25 transition-colors disabled:opacity-50"

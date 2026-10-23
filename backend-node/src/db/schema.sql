@@ -86,6 +86,9 @@ ALTER COLUMN recruitment_id DROP NOT NULL;
 ALTER TABLE applications
 ADD COLUMN IF NOT EXISTS reviewed_by_id UUID REFERENCES users(id);
 
+ALTER TABLE applications
+ADD COLUMN IF NOT EXISTS rejection_reason TEXT;
+
 UPDATE applications a
 SET recruitment_snapshot = jsonb_build_object(
     'id', r.id,

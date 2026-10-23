@@ -109,7 +109,7 @@ router.get('/:recruitmentId', async (req, res) => {
 
       if (recruitment.category !== 'complaints' && appResult.rows.length > 0) {
         userApplicationStatus = appResult.rows[0].status;
-        userCanApply = appResult.rows[0].status === 'odrzucone';
+        userCanApply = appResult.rows[0].status !== 'nowe';
         if (!userCanApply) {
           userApplyBlockReason = userApplicationStatus;
         }

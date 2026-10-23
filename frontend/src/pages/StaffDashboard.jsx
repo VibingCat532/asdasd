@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
-import { Badge } from "../components/ui/badge";
 import { Switch } from "../components/ui/switch";
-import { Loader2, Plus, ShieldCheck, Users, FileText, Settings, AlertTriangle, Lock, Trash2, History, BarChart3 } from "lucide-react";
+import { Loader2, Plus, ShieldCheck, AlertTriangle, Lock, Trash2, History, BarChart3, Pencil } from "lucide-react";
 import axios from "axios";
 import { API } from "../lib/api";
+import { EmptyState, PanelMark, Spinner } from "../components/hs";
+import { CATEGORY_LABELS, getCategory } from "../lib/panels";
 
 const ROLE_LABELS = {
   management: "Management",
@@ -13,6 +14,25 @@ const ROLE_LABELS = {
   opiekun_administracji: "Opiekun Administracji",
   accepted_adm: "Accepted ADM",
 };
+
+const PERMISSION_LABELS = {
+  full: "pełne",
+  all: "ALL",
+  editor: "edytor",
+  reviewer: "recenzent",
+  deleter: "usuwanie podań",
+  statistics: "statystyki",
+};
+
+const formatNumber = (value) => Number(value || 0).toLocaleString("pl-PL");
+
+function newApplicationsText(count) {
+  if (count === 1) return "1 nowe zgłoszenie czeka";
+  const lastDigit = count % 10;
+  const lastTwo = count % 100;
+  const few = lastDigit >= 2 && lastDigit <= 4 && (lastTwo < 12 || lastTwo > 14);
+  return `${count} ${few ? "nowe zgłoszenia czekają" : "nowych zgłoszeń czeka"}`;
+}
 
 export default function StaffDashboard() {
   const { user, staffInfo, loading: authLoading, refetchStaff } = useAuth();
@@ -36,36 +56,28 @@ export default function StaffDashboard() {
   }, [user, staffInfo]);
 
   if (authLoading) {
-    return (
-      <div className="flex justify-center py-32">
-        <Loader2 className="w-8 h-8 animate-spin text-[#00E5FF]" />
-      </div>
-    );
+    return <Spinner />;
   }
+
+  const diagnostics = `Role Discord: ${staffInfo?.discord_role_count ?? 0} · źródło: ${staffInfo?.role_resolution_source || "nieznane"} · serwer ${staffInfo?.configured_guild_id || "nieznany"}`;
 
   if (!user) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-20 text-center" data-testid="staff-login-required">
-        <Lock className="w-12 h-12 text-zinc-600 mx-auto mb-4" />
-        <p className="text-zinc-400 text-lg">Zaloguj sie, aby uzyskac dostep do panelu.</p>
+      <div className="max-w-xl mx-auto px-4 py-20 text-center" data-testid="staff-login-required">
+        <Lock className="w-10 h-10 text-hs-faint mx-auto mb-4" strokeWidth={1.6} />
+        <p className="text-lg text-hs-chrome">Zaloguj się, aby uzyskać dostęp do panelu.</p>
       </div>
     );
   }
 
   if (!staffInfo?.is_staff) {
     return (
-      <div className="max-w-2xl mx-auto px-4 py-20 text-center" data-testid="staff-no-access">
-        <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-        <h2 className="text-xl font-bold text-zinc-200 mb-2" style={{ fontFamily: "'Unbounded', sans-serif" }}>
-          Brak dostepu
-        </h2>
-        <p className="text-zinc-400">Twoje konto Discord nie posiada roli uprawniajacej do panelu staff.</p>
-        <p className="text-zinc-500 text-sm mt-2">
-          Wymagana rola: management, opiekun lub opiekun administracji.
-        </p>
-        <p className="text-zinc-600 text-xs mt-4" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-          Discord roles: {staffInfo?.discord_role_count ?? 0} | source: {staffInfo?.role_resolution_source || "unknown"} | guild: {staffInfo?.configured_guild_id || "unknown"}
-        </p>
+      <div className="max-w-xl mx-auto px-4 py-20 text-center" data-testid="staff-no-access">
+        <AlertTriangle className="w-10 h-10 text-hs-notice mx-auto mb-4" strokeWidth={1.6} />
+        <h1 className="hs-display text-[40px]">Brak dostępu</h1>
+        <p className="mt-3 text-hs-chrome">Twoje konto Discord nie ma roli uprawniającej do panelu staff.</p>
+        <p className="mt-2 text-[15px] text-hs-meta">Wymagana rola: management, opiekun lub opiekun administracji.</p>
+        <p className="mt-5 text-[13px] text-hs-faint">{diagnostics}</p>
       </div>
     );
   }
@@ -74,7 +86,7 @@ export default function StaffDashboard() {
   const isManagement = staffInfo?.is_management === true;
 
   const handleDeleteRecruitment = async (rec) => {
-    if (!window.confirm('Usunac rekrutacje "' + rec.name + '"?')) return;
+    if (!window.confirm(`Usunąć panel "${rec.name}"? Zgłoszenia zostaną w historii, ale panel zniknie.`)) return;
 
     setDeletingId(rec.id);
     try {
@@ -82,7 +94,7 @@ export default function StaffDashboard() {
       setRecruitments(prev => prev.filter(item => item.id !== rec.id));
       refetchStaff?.();
     } catch (err) {
-      window.alert(err.response?.data?.error || "Nie udalo sie usunac rekrutacji");
+      window.alert(err.response?.data?.error || "Nie udało się usunąć panelu");
     } finally {
       setDeletingId(null);
     }
@@ -101,168 +113,261 @@ export default function StaffDashboard() {
         item.id === rec.id ? { ...item, status: res.data.status || nextStatus } : item
       )));
     } catch (err) {
-      window.alert(err.response?.data?.error || "Nie udalo sie zmienic statusu rekrutacji");
+      window.alert(err.response?.data?.error || "Nie udało się zmienić statusu panelu");
     } finally {
       setUpdatingStatusId(null);
     }
   };
 
+  // Panels with new applications come first: that is the work waiting.
+  const panels = [...recruitments].sort((a, b) => (b.pending_count || 0) - (a.pending_count || 0));
+  const pendingTotal = recruitments.reduce((sum, rec) => sum + (rec.pending_count || 0), 0);
+  const applicationTotal = recruitments.reduce((sum, rec) => sum + (rec.app_count || 0), 0);
+  const openCount = recruitments.filter((rec) => rec.status === "active").length;
+  const openComplaints = recruitments.filter((rec) => rec.status === "active" && getCategory(rec) === "complaints").length;
+  const queue = panels.filter((rec) => rec.pending_count > 0 && (rec.can_review_applications || rec.can_delete_applications));
+  const panelsWithPending = recruitments.filter((rec) => rec.pending_count > 0).length;
+
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8" data-testid="staff-dashboard">
-      <div className="hs-animate-fade-up mb-8">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00E5FF] mb-3" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-          Panel Staff
-        </p>
-        <div className="flex flex-wrap items-center gap-3 mb-4">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight uppercase" style={{ fontFamily: "'Unbounded', sans-serif", color: "#FAFAFA" }} data-testid="staff-title">
-            Dashboard
-          </h1>
-          {mappedRoles.map((role) => (
-            <Badge key={role} className="bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30 text-xs font-mono uppercase">
-              {ROLE_LABELS[role] || role}
-            </Badge>
-          ))}
+    <div className="max-w-[1240px] mx-auto px-4 sm:px-8 pt-8 sm:pt-10 pb-16" data-testid="staff-dashboard">
+      <div className="flex flex-col lg:flex-row lg:items-end lg:justify-between gap-5">
+        <div>
+          <div className="flex flex-wrap items-center gap-3.5">
+            <h1 className="hs-display text-[40px] sm:text-[44px] leading-[0.95]" data-testid="staff-title">Panel staff</h1>
+            {mappedRoles.map((role) => (
+              <span key={role} className="hs-pill hs-pill-neutral">{ROLE_LABELS[role] || role}</span>
+            ))}
+          </div>
+          {!loading && (
+            <p className="mt-2.5 text-base text-hs-chrome">
+              {pendingTotal > 0
+                ? `${newApplicationsText(pendingTotal)} na decyzję w ${panelsWithPending} ${panelsWithPending === 1 ? "panelu" : "panelach"}.`
+                : "Wszystkie zgłoszenia są rozpatrzone."}
+            </p>
+          )}
         </div>
-
-        <p className="text-xs text-zinc-500 mb-4" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-          Discord roles: {staffInfo.discord_role_count ?? 0} | source: {staffInfo.role_resolution_source || "unknown"} | guild: {staffInfo.configured_guild_id || "unknown"}
-        </p>
-
         <div className="flex flex-wrap gap-2">
+          {isManagement && (
+            <Link to="/staff/history" className="hs-btn hs-btn-ghost" data-testid="application-history-button">
+              <History className="w-4 h-4" strokeWidth={1.8} /> Historia podań
+            </Link>
+          )}
+          {staffInfo.can_create_recruitment && (
+            <Link to="/staff/recruitments/new?category=complaints" className="hs-btn hs-btn-ghost" data-testid="create-complaint-panel-button">
+              <Plus className="w-4 h-4" strokeWidth={1.8} /> Nowy panel skarg
+            </Link>
+          )}
           {staffInfo.can_create_recruitment ? (
-            <Link
-              to="/staff/recruitments/new"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold bg-[#00E5FF] text-black hover:bg-[#00E5FF]/90 transition-colors"
-              data-testid="create-recruitment-button"
-            >
-              <Plus className="w-4 h-4" /> Nowa Rekrutacja
+            <Link to="/staff/recruitments/new" className="hs-btn hs-btn-primary" data-testid="create-recruitment-button">
+              <Plus className="w-4 h-4" strokeWidth={2} /> Nowa rekrutacja
             </Link>
           ) : staffInfo.creation_limit_reached ? (
-            <p className="text-sm text-zinc-500" data-testid="creation-limit-reached">
-              Osiagnieto limit rekrutacji (max 1 dla opiekuna)
+            <p className="self-center text-sm text-hs-meta" data-testid="creation-limit-reached">
+              Osiągnięto limit rekrutacji (maks. 1 dla opiekuna)
             </p>
           ) : null}
-
-          {staffInfo.can_create_recruitment && (
-            <Link to="/staff/recruitments/new?category=complaints" className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border border-amber-500/30 text-amber-200 hover:bg-amber-500/10" data-testid="create-complaint-panel-button">
-              <Plus className="w-4 h-4" /> Nowy panel skarg
-            </Link>
-          )}
-
-          {isManagement && (
-            <Link
-              to="/staff/history"
-              className="inline-flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-semibold border border-white/10 text-zinc-300 hover:border-[#00E5FF]/30 hover:text-[#00E5FF] transition-colors"
-              data-testid="application-history-button"
-            >
-              <History className="w-4 h-4" /> Historia Podan
-            </Link>
-          )}
         </div>
       </div>
 
       {loading ? (
-        <div className="flex justify-center py-16">
-          <Loader2 className="w-8 h-8 animate-spin text-[#00E5FF]" />
-        </div>
+        <Spinner className="py-20" />
       ) : recruitments.length === 0 ? (
-        <div className="text-center py-16 rounded-xl bg-[#0F0F13] border border-white/5" data-testid="no-staff-recruitments">
-          <ShieldCheck className="w-10 h-10 text-zinc-700 mx-auto mb-3" />
-          <p className="text-zinc-400">Brak dostepnych rekrutacji</p>
+        <div className="mt-8">
+          <EmptyState icon={ShieldCheck} title="Nie masz jeszcze dostępu do żadnego panelu" data-testid="no-staff-recruitments" />
         </div>
       ) : (
-        <div className="grid gap-4 sm:grid-cols-2" data-testid="staff-recruitments-list">
-          {recruitments.map((rec) => (
-            <div key={rec.id} className="rounded-xl bg-[#141418] border border-white/10 p-5 group" data-testid={`staff-rec-${rec.slug}`}>
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div>
-                  <div className="h-0.5 w-10 rounded-full mb-2" style={{ background: rec.theme_color }} />
-                  <h3 className="text-base font-semibold text-zinc-200" style={{ fontFamily: "'Outfit', sans-serif" }}>
-                    {rec.name}
-                  </h3>
-                  {rec.category === "complaints" && <span className="text-xs text-amber-300">Panel skarg</span>}
-                </div>
-                <div className="flex gap-1.5 shrink-0">
-                  <Badge
-                    className={
-                      rec.status === "active"
-                        ? "bg-[#00E5FF]/15 text-[#00E5FF] border border-[#00E5FF]/30 text-xs font-mono uppercase"
-                        : "bg-zinc-800/50 text-zinc-500 border border-zinc-700/30 text-xs font-mono uppercase"
-                    }
-                  >
-                    {rec.status === "active" ? "aktywna" : "nieaktywna"}
-                  </Badge>
-                  <Badge
-                    className={
-                      ["full", "all"].includes(rec.permission_level)
-                        ? "bg-emerald-500/15 text-emerald-400 border border-emerald-500/30 text-xs font-mono uppercase"
-                        : "bg-amber-500/15 text-amber-400 border border-amber-500/30 text-xs font-mono uppercase"
-                    }
-                  >
-                    {{ full: "pełny", all: "ALL", editor: "edytor", reviewer: "recenzent", deleter: "usuwanie podań", statistics: "statystyki" }[rec.permission_level]}
-                  </Badge>
-                </div>
+        <div className="mt-8 flex flex-col lg:flex-row gap-6 lg:items-start">
+          <div className="flex-1 min-w-0 flex flex-col gap-4">
+            <dl className="hs-card grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-hs-line">
+              <div className="px-6 py-5">
+                <dt className="text-sm text-hs-meta">Nowe zgłoszenia</dt>
+                <dd className="mt-1.5 text-[32px] font-semibold leading-none tabular-nums text-hs-accent-soft">{formatNumber(pendingTotal)}</dd>
+                <dd className="mt-1.5 text-[13px] text-hs-meta">w {panelsWithPending} z {recruitments.length} paneli</dd>
               </div>
-
-              <div className="flex items-center gap-4 mb-4 text-xs text-zinc-500" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-                <span className="flex items-center gap-1">
-                  <Users className="w-3 h-3" /> {rec.app_count} zgłoszeń
-                </span>
-                {rec.pending_count > 0 && (
-                  <span className="flex items-center gap-1 text-[#00E5FF]">
-                    <FileText className="w-3 h-3" /> {rec.pending_count} nowych
-                  </span>
-                )}
+              <div className="px-6 py-5">
+                <dt className="text-sm text-hs-meta">Wszystkie zgłoszenia</dt>
+                <dd className="mt-1.5 text-2xl font-medium leading-none tabular-nums">{formatNumber(applicationTotal)}</dd>
+                <dd className="mt-1.5 text-[13px] text-hs-meta">w Twoich panelach</dd>
               </div>
+              <div className="px-6 py-5">
+                <dt className="text-sm text-hs-meta">Przyjmują zgłoszenia</dt>
+                <dd className="mt-1.5 text-2xl font-medium leading-none tabular-nums">{openCount} <span className="text-[15px] text-hs-meta">/ {recruitments.length} paneli</span></dd>
+                <dd className="mt-1.5 text-[13px] text-hs-meta">{openCount - openComplaints} rekrutacji, {openComplaints} skarg</dd>
+              </div>
+            </dl>
 
-              {rec.can_update_status && (
-                <div className="flex items-center justify-between gap-3 mb-4 rounded-lg border border-white/5 bg-black/20 px-3 py-2">
-                  <span className="text-xs font-medium text-zinc-400">Przyjmowanie zgłoszeń</span>
-                  <Switch
-                    checked={rec.status === "active"}
-                    disabled={updatingStatusId === rec.id}
-                    onCheckedChange={(checked) => handleStatusToggle(rec, checked)}
-                    className="data-[state=checked]:bg-[#00E5FF] data-[state=unchecked]:bg-zinc-800"
-                    data-testid={`toggle-rec-status-${rec.slug}`}
-                    title={rec.status === "active" ? "Ustaw jako nieaktywna" : "Ustaw jako aktywna"}
+            <section aria-labelledby="panele-h" className="hs-card pt-2 pb-1" data-testid="staff-recruitments-list">
+              <h2 id="panele-h" className="px-5 sm:px-6 pt-3 pb-2 text-base font-semibold">Twoje panele</h2>
+
+              <table className="hidden md:table w-full text-[15px]">
+                <thead>
+                  <tr className="text-left text-[13px] text-hs-meta">
+                    <th scope="col" className="font-normal px-6 py-2.5 border-b border-hs-line">Panel</th>
+                    <th scope="col" className="font-normal px-3 py-2.5 text-right border-b border-hs-line">Zgłoszenia</th>
+                    <th scope="col" className="font-normal px-3 py-2.5 text-right border-b border-hs-line">Nowe</th>
+                    <th scope="col" className="font-normal px-3 py-2.5 border-b border-hs-line">Przyjmowanie</th>
+                    <th scope="col" className="px-6 py-2.5 border-b border-hs-line"><span className="sr-only">Akcje</span></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {panels.map((rec, index) => (
+                    <PanelRow
+                      key={rec.id}
+                      rec={rec}
+                      last={index === panels.length - 1}
+                      deleting={deletingId === rec.id}
+                      updating={updatingStatusId === rec.id}
+                      onToggle={handleStatusToggle}
+                      onDelete={handleDeleteRecruitment}
+                    />
+                  ))}
+                </tbody>
+              </table>
+
+              <ul className="md:hidden">
+                {panels.map((rec) => (
+                  <PanelCard
+                    key={rec.id}
+                    rec={rec}
+                    deleting={deletingId === rec.id}
+                    updating={updatingStatusId === rec.id}
+                    onToggle={handleStatusToggle}
+                    onDelete={handleDeleteRecruitment}
                   />
-                </div>
-              )}
+                ))}
+              </ul>
+            </section>
+          </div>
 
-              <div className="flex flex-wrap gap-2">
-                {(rec.can_review_applications || rec.can_delete_applications) && <Link
-                  to={`/staff/recruitments/${rec.id}/applications`}
-                  className="flex-1 text-center px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-zinc-300 hover:bg-white/10 transition-colors"
-                  data-testid={`review-apps-${rec.slug}`}
-                >
-                  <FileText className="w-3 h-3 inline mr-1" />{rec.category === "complaints" ? "Skargi" : "Aplikacje"}
-                </Link>}
-                {(rec.can_edit_questions || rec.can_update_status) && <Link
-                  to={`/staff/recruitments/${rec.id}/edit`}
-                  className="flex-1 text-center px-3 py-2 rounded-lg text-xs font-medium bg-white/5 text-zinc-300 hover:bg-white/10 transition-colors"
-                  data-testid={`edit-rec-${rec.slug}`}
-                >
-                  <Settings className="w-3 h-3 inline mr-1" />Edytuj
-                </Link>}
-                {rec.can_view_statistics && <Link to={`/staff/recruitments/${rec.id}/statistics`} className="flex-1 text-center px-3 py-2 rounded-lg text-xs font-medium bg-[#00E5FF]/10 text-[#00E5FF] hover:bg-[#00E5FF]/20" data-testid={`statistics-${rec.slug}`}>
-                  <BarChart3 className="w-3 h-3 inline mr-1" />Statystyki
-                </Link>}
-                {rec.can_delete_recruitment && (
-                  <button
-                    onClick={() => handleDeleteRecruitment(rec)}
-                    disabled={deletingId === rec.id}
-                    className="px-3 py-2 rounded-lg text-xs font-medium bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors disabled:opacity-50"
-                    data-testid={"delete-rec-" + rec.slug}
-                    title="Usun rekrutacje"
-                  >
-                    {deletingId === rec.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Trash2 className="w-3 h-3" />}
-                  </button>
-                )}
-              </div>
-            </div>
-          ))}
+          <aside aria-labelledby="kolejka" className="lg:w-[340px] flex-none">
+            <h2 id="kolejka" className="mb-2 text-base font-semibold">Do rozpatrzenia</h2>
+            {queue.length === 0 ? (
+              <p className="hs-card px-5 py-4 text-[15px] text-hs-meta">Nie ma nowych zgłoszeń w Twoich panelach.</p>
+            ) : (
+              <ul className="hs-card px-5 py-2">
+                {queue.map((rec, index) => (
+                  <li key={rec.id} className={`flex items-center gap-3 py-3 ${index < queue.length - 1 ? "border-b border-hs-raised" : ""}`}>
+                    <PanelMark recruitment={rec} size={36} />
+                    <span className="flex-1 min-w-0">
+                      <span className="block font-semibold leading-snug">{rec.name}</span>
+                      <span className="block text-[13px] text-hs-meta">{rec.pending_count} nowe · {formatNumber(rec.app_count)} w panelu</span>
+                    </span>
+                    <Link to={`/staff/recruitments/${rec.id}/applications?status=nowe`} className="hs-btn hs-btn-ghost hs-btn-sm">Rozpatrz</Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </aside>
         </div>
       )}
+
+      <p className="mt-10 text-[13px] text-hs-faint">{diagnostics}</p>
     </div>
+  );
+}
+
+function panelSubline(rec) {
+  const category = CATEGORY_LABELS[getCategory(rec)] || CATEGORY_LABELS.general;
+  const permission = PERMISSION_LABELS[rec.permission_level];
+  return permission ? `${category} · uprawnienia: ${permission}` : category;
+}
+
+function StatusToggle({ rec, updating, onToggle }) {
+  const isOpen = rec.status === "active";
+  if (!rec.can_update_status) {
+    return <span className={`text-sm ${isOpen ? "text-hs-chrome" : "text-hs-meta"}`}>{isOpen ? "Otwarte" : "Zamknięte"}</span>;
+  }
+  return (
+    <span className="inline-flex items-center gap-2.5">
+      <Switch
+        checked={isOpen}
+        disabled={updating}
+        onCheckedChange={(checked) => onToggle(rec, checked)}
+        className="data-[state=checked]:bg-[#2E9C63] data-[state=unchecked]:bg-hs-control"
+        aria-label={`Przyjmowanie zgłoszeń: ${rec.name}`}
+        data-testid={`toggle-rec-status-${rec.slug}`}
+      />
+      <span className={`text-sm ${isOpen ? "text-hs-chrome" : "text-hs-meta"}`}>{isOpen ? "Otwarte" : "Zamknięte"}</span>
+    </span>
+  );
+}
+
+function PanelActions({ rec, deleting, onDelete }) {
+  const isComplaint = getCategory(rec) === "complaints";
+  return (
+    <div className="flex items-center justify-end gap-1">
+      {(rec.can_review_applications || rec.can_delete_applications) && (
+        <Link to={`/staff/recruitments/${rec.id}/applications`} className="hs-btn hs-btn-ghost hs-btn-sm mr-1" data-testid={`review-apps-${rec.slug}`}>
+          {isComplaint ? "Skargi" : "Zgłoszenia"}
+        </Link>
+      )}
+      {(rec.can_edit_questions || rec.can_update_status) && (
+        <Link to={`/staff/recruitments/${rec.id}/edit`} className="hs-icon-btn" aria-label={`Edytuj panel ${rec.name}`} title="Edytuj" data-testid={`edit-rec-${rec.slug}`}>
+          <Pencil className="w-4 h-4" strokeWidth={1.8} />
+        </Link>
+      )}
+      {rec.can_view_statistics && (
+        <Link to={`/staff/recruitments/${rec.id}/statistics`} className="hs-icon-btn" aria-label={`Statystyki panelu ${rec.name}`} title="Statystyki" data-testid={`statistics-${rec.slug}`}>
+          <BarChart3 className="w-4 h-4" strokeWidth={1.8} />
+        </Link>
+      )}
+      {rec.can_delete_recruitment && (
+        <button
+          type="button"
+          onClick={() => onDelete(rec)}
+          disabled={deleting}
+          className="hs-icon-btn hover:text-hs-negative"
+          aria-label={`Usuń panel ${rec.name}`}
+          title="Usuń panel"
+          data-testid={"delete-rec-" + rec.slug}
+        >
+          {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" strokeWidth={1.8} />}
+        </button>
+      )}
+    </div>
+  );
+}
+
+function PanelRow({ rec, last, deleting, updating, onToggle, onDelete }) {
+  const cell = last ? "" : "border-b border-hs-raised";
+  return (
+    <tr className="transition-colors hover:bg-[#111618]" data-testid={`staff-rec-${rec.slug}`}>
+      <td className={`px-6 py-3.5 ${cell}`}>
+        <div className="flex items-center gap-3">
+          <PanelMark recruitment={rec} size={36} />
+          <div className="min-w-0">
+            <p className="font-semibold">{rec.name}</p>
+            <p className="text-[13px] text-hs-meta">{panelSubline(rec)}</p>
+          </div>
+        </div>
+      </td>
+      <td className={`px-3 py-3.5 text-right tabular-nums text-hs-chrome ${cell}`}>{formatNumber(rec.app_count)}</td>
+      <td className={`px-3 py-3.5 text-right tabular-nums ${cell}`}>
+        {rec.pending_count > 0 ? <span className="font-semibold text-hs-accent-soft">{rec.pending_count}</span> : <span className="text-hs-meta">0</span>}
+      </td>
+      <td className={`px-3 py-3.5 ${cell}`}><StatusToggle rec={rec} updating={updating} onToggle={onToggle} /></td>
+      <td className={`px-6 py-3.5 ${cell}`}><PanelActions rec={rec} deleting={deleting} onDelete={onDelete} /></td>
+    </tr>
+  );
+}
+
+function PanelCard({ rec, deleting, updating, onToggle, onDelete }) {
+  return (
+    <li className="px-5 py-4 border-t border-hs-raised first:border-t-0" data-testid={`staff-rec-${rec.slug}`}>
+      <div className="flex items-center gap-3">
+        <PanelMark recruitment={rec} size={40} />
+        <div className="flex-1 min-w-0">
+          <p className="font-semibold">{rec.name}</p>
+          <p className="text-[13px] text-hs-meta">
+            {formatNumber(rec.app_count)} zgłoszeń
+            {rec.pending_count > 0 && <span className="text-hs-accent-soft font-semibold"> · {rec.pending_count} nowe</span>}
+          </p>
+        </div>
+      </div>
+      <div className="mt-3 flex items-center justify-between gap-3 flex-wrap">
+        <StatusToggle rec={rec} updating={updating} onToggle={onToggle} />
+        <PanelActions rec={rec} deleting={deleting} onDelete={onDelete} />
+      </div>
+    </li>
   );
 }

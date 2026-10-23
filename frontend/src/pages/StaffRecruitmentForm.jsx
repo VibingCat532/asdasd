@@ -53,12 +53,12 @@ const ACCESS_OPTIONS = [
 
 function AccessOptions({ access, canGrantAll, onChange }) {
   return ACCESS_OPTIONS.map(([key, label]) => (
-    <label key={key} className="flex items-center gap-2 text-xs text-zinc-400">
+    <label key={key} className="flex items-center gap-2 text-xs text-hs-muted">
       <Checkbox
         checked={!!access[key] || (key !== "can_all" && !!access.can_all)}
         disabled={key === "can_all" ? !canGrantAll : !!access.can_all}
         onCheckedChange={value => onChange({ [key]: !!value })}
-        className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]"
+        className="border-hs-control data-[state=checked]:bg-hs-accent data-[state=checked]:border-hs-accent data-[state=checked]:text-hs-ground"
       />
       {label}
     </label>
@@ -460,17 +460,17 @@ export default function StaffRecruitmentForm() {
     }
   };
 
-  if (authLoading) return <div className="flex justify-center py-32"><Loader2 className="w-8 h-8 animate-spin text-[#00E5FF]" /></div>;
-  if (!user) return <div className="max-w-2xl mx-auto px-4 py-20 text-center"><Lock className="w-12 h-12 text-zinc-600 mx-auto mb-4" /><p className="text-zinc-400">Zaloguj się</p></div>;
+  if (authLoading) return <div className="flex justify-center py-32"><Loader2 className="w-8 h-8 animate-spin text-hs-accent" /></div>;
+  if (!user) return <div className="max-w-2xl mx-auto px-4 py-20 text-center"><Lock className="w-12 h-12 text-hs-faint mx-auto mb-4" /><p className="text-hs-muted">Zaloguj się</p></div>;
   if (!staffInfo?.is_staff || (!isEdit && !staffInfo?.can_create_recruitment)) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-20 text-center">
-        <AlertTriangle className="w-12 h-12 text-amber-500 mx-auto mb-4" />
-        <p className="text-zinc-400">Brak dostepu do tej czesci panelu.</p>
+        <AlertTriangle className="w-12 h-12 text-hs-notice mx-auto mb-4" />
+        <p className="text-hs-muted">Brak dostepu do tej czesci panelu.</p>
       </div>
     );
   }
-  if (loading) return <div className="flex justify-center py-32"><Loader2 className="w-8 h-8 animate-spin text-[#00E5FF]" /></div>;
+  if (loading) return <div className="flex justify-center py-32"><Loader2 className="w-8 h-8 animate-spin text-hs-accent" /></div>;
 
   const showBasicTab = !isEdit || permissions.canEditRecruitment;
   const showQuestionsTab = !isEdit || permissions.canEditQuestions;
@@ -482,53 +482,54 @@ export default function StaffRecruitmentForm() {
   const availableBlacklistUsers = allUsers.filter(u => !blacklistUserIds.has(u.id) && u.id !== user?.id);
 
   return (
-    <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8" data-testid="staff-recruitment-form">
-      <Link to="/staff" className="inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-300 transition-colors mb-6" data-testid="back-to-staff">
-        <ArrowLeft className="w-3.5 h-3.5" />Panel Staff
+    <div className="max-w-[880px] mx-auto px-4 sm:px-8 pt-6 sm:pt-8 pb-16" data-testid="staff-recruitment-form">
+      <Link to="/staff" className="hs-back" data-testid="back-to-staff">
+        <ArrowLeft className="w-4 h-4" strokeWidth={1.8} />Panel staff
       </Link>
 
-      <div className="hs-animate-fade-up mb-6">
-        <p className="text-xs font-bold uppercase tracking-[0.2em] text-[#00E5FF] mb-2" style={{ fontFamily: "'JetBrains Mono', monospace" }}>
-          {isEdit ? "Edycja panelu" : isComplaint ? "Nowy panel skarg" : "Nowa rekrutacja"}
-        </p>
-        <h1 className="text-xl sm:text-2xl font-bold tracking-tight" style={{ fontFamily: "'Unbounded', sans-serif", color: "#FAFAFA" }} data-testid="form-title">
-          {isEdit ? (form.name || "...") : isComplaint ? "Utwórz panel skarg" : "Utwórz rekrutację"}
+      <div className="mt-6 mb-8">
+        <h1 className="hs-display text-[40px] sm:text-[44px] leading-[0.95] break-words" data-testid="form-title">
+          {isEdit ? (form.name || "...") : isComplaint ? "Nowy panel skarg" : "Nowa rekrutacja"}
         </h1>
+        <p className="mt-2.5 text-base text-hs-chrome">
+          {isEdit ? "Edycja panelu" : isComplaint ? "Utwórz formularz, przez który gracze zgłoszą skargę." : "Utwórz panel rekrutacji z własnym zestawem pytań."}
+        </p>
       </div>
 
       {errors.length > 0 && (
-        <div className="rounded-lg bg-red-500/5 border border-red-500/15 p-4 mb-6" data-testid="form-errors">
-          {errors.map((e, i) => <p key={i} className="text-sm text-red-400 flex items-center gap-2"><AlertTriangle className="w-3.5 h-3.5" />{e}</p>)}
+        <div className="hs-note hs-note-bad flex-col mb-6" role="alert" data-testid="form-errors">
+          {errors.map((e, i) => <p key={i} className="flex items-center gap-2"><AlertTriangle className="w-3.5 h-3.5 flex-none" />{e}</p>)}
         </div>
       )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="bg-[#0F0F13] border border-white/5">
-          {showBasicTab && <TabsTrigger value="basic" className="data-[state=active]:bg-[#00E5FF]/15 data-[state=active]:text-[#00E5FF]" data-testid="tab-basic">Podstawowe</TabsTrigger>}
-          {showQuestionsTab && <TabsTrigger value="questions" className="data-[state=active]:bg-[#00E5FF]/15 data-[state=active]:text-[#00E5FF]" data-testid="tab-questions">Pytania ({questions.length})</TabsTrigger>}
-          {showAccessTab && <TabsTrigger value="access" className="data-[state=active]:bg-[#00E5FF]/15 data-[state=active]:text-[#00E5FF]" data-testid="tab-access">Dostęp ({accessUsers.length})</TabsTrigger>}
-          {showAccessTab && <TabsTrigger value="blacklist" className="data-[state=active]:bg-red-500/15 data-[state=active]:text-red-300" data-testid="tab-blacklist">Blacklista ({blacklistUsers.length})</TabsTrigger>}
+        <TabsList className="bg-hs-surface h-11 p-1 rounded-full flex-wrap h-auto">
+          {showBasicTab && <TabsTrigger value="basic" className="rounded-full px-4 h-9 data-[state=active]:bg-hs-ink data-[state=active]:text-hs-ground" data-testid="tab-basic">Podstawowe</TabsTrigger>}
+          {showQuestionsTab && <TabsTrigger value="questions" className="rounded-full px-4 h-9 data-[state=active]:bg-hs-ink data-[state=active]:text-hs-ground" data-testid="tab-questions">Pytania ({questions.length})</TabsTrigger>}
+          {showAccessTab && <TabsTrigger value="access" className="rounded-full px-4 h-9 data-[state=active]:bg-hs-ink data-[state=active]:text-hs-ground" data-testid="tab-access">Dostęp ({accessUsers.length})</TabsTrigger>}
+          {showAccessTab && <TabsTrigger value="blacklist" className="rounded-full px-4 h-9 data-[state=active]:bg-hs-ink data-[state=active]:text-hs-ground" data-testid="tab-blacklist">Blacklista ({blacklistUsers.length})</TabsTrigger>}
         </TabsList>
 
         {/* Basic Tab */}
         {showBasicTab && (
           <TabsContent value="basic" className="space-y-5">
             <div>
-              <Label className="text-zinc-300 mb-1.5 block text-sm">Nazwa *</Label>
+              <Label className="text-hs-ink mb-2 block text-[15px] font-medium">Nazwa *</Label>
               <Input value={form.name} onChange={e => updateForm("name", e.target.value)} placeholder={isComplaint ? "np. Skargi na policję" : "np. Administracja"}
-                className="bg-black/40 border-white/10 focus:border-[#00E5FF] text-zinc-100" data-testid="input-name" />
+                className="h-11 rounded-lg border-hs-control bg-hs-surface text-hs-ink text-[15px] placeholder:text-[#7C868B] hover:border-[#3C474C] focus-visible:ring-0 focus:border-hs-accent focus:shadow-[0_0_0_3px_#12383C]" data-testid="input-name" />
             </div>
             <div>
-              <Label className="text-zinc-300 mb-1.5 block text-sm">Opis *</Label>
+              <Label className="text-hs-ink mb-2 block text-[15px] font-medium">Opis *</Label>
               <textarea value={form.description} onChange={e => updateForm("description", e.target.value)} rows={3} placeholder="Opis widoczny publicznie..."
-                className="flex w-full rounded-md border bg-black/40 border-white/10 px-3 py-2 text-sm text-zinc-100 placeholder:text-zinc-600 focus:border-[#00E5FF] focus:ring-1 focus:ring-[#00E5FF] focus:outline-none resize-y"
+                className="hs-field py-3 text-[15px] leading-normal resize-y"
                 data-testid="input-description" />
+              <p className="mt-1.5 text-[13px] text-hs-meta">Pierwsza linia to opis panelu. Każda kolejna linia pokaże się graczom jako wyróżniona zasada, np. „Minimalny wiek: 17 lat”.</p>
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label className="text-zinc-300 mb-1.5 block text-sm">Status</Label>
+                <Label className="text-hs-ink mb-2 block text-[15px] font-medium">Status</Label>
                 <Select value={form.status} onValueChange={v => updateForm("status", v)}>
-                  <SelectTrigger className="bg-black/40 border-white/10 text-zinc-100" data-testid="select-status"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-11 rounded-lg border-hs-control bg-hs-surface text-hs-ink text-[15px] focus:ring-0 focus:border-hs-accent" data-testid="select-status"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="active">Aktywna</SelectItem>
                     <SelectItem value="inactive">Nieaktywna</SelectItem>
@@ -536,7 +537,7 @@ export default function StaffRecruitmentForm() {
                 </Select>
               </div>
               <div>
-                <Label className="text-zinc-300 mb-1.5 block text-sm">Kolor motywu</Label>
+                <Label className="text-hs-ink mb-2 block text-[15px] font-medium">Kolor motywu</Label>
                 <div className="flex gap-1.5 flex-wrap">
                   {COLORS.map(c => (
                     <button key={c.value} onClick={() => updateForm("theme_color", c.value)}
@@ -548,9 +549,9 @@ export default function StaffRecruitmentForm() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label className="text-zinc-300 mb-1.5 block text-sm">Kategoria</Label>
+                <Label className="text-hs-ink mb-2 block text-[15px] font-medium">Kategoria</Label>
                 <Select value={form.category || "general"} onValueChange={v => updateForm("category", v)}>
-                  <SelectTrigger className="bg-black/40 border-white/10 text-zinc-100" data-testid="select-category"><SelectValue /></SelectTrigger>
+                  <SelectTrigger className="h-11 rounded-lg border-hs-control bg-hs-surface text-hs-ink text-[15px] focus:ring-0 focus:border-hs-accent" data-testid="select-category"><SelectValue /></SelectTrigger>
                   <SelectContent>
                     {CATEGORIES.map(category => (
                       <SelectItem key={category.value} value={category.value}>{category.label}</SelectItem>
@@ -559,13 +560,13 @@ export default function StaffRecruitmentForm() {
                 </Select>
               </div>
               {!isComplaint && <div>
-                <Label className="text-zinc-300 mb-1.5 block text-sm">Rola Discord (po akceptacji)</Label>
+                <Label className="text-hs-ink mb-2 block text-[15px] font-medium">Rola Discord (po akceptacji)</Label>
                 <Input value={form.accepted_discord_role_id} onChange={e => updateForm("accepted_discord_role_id", e.target.value)}
-                  placeholder="ID roli Discord" className="bg-black/40 border-white/10 focus:border-[#00E5FF] text-zinc-100 font-mono text-xs"
+                  placeholder="ID roli Discord" className="h-11 rounded-lg border-hs-control bg-hs-surface text-hs-ink text-[15px] placeholder:text-[#7C868B] hover:border-[#3C474C] focus-visible:ring-0 focus:border-hs-accent focus:shadow-[0_0_0_3px_#12383C] font-mono"
                   data-testid="input-role-id" />
               </div>}
             </div>
-            {isComplaint && <p className="rounded-xl border border-amber-500/20 bg-amber-500/5 p-4 text-sm text-amber-200">
+            {isComplaint && <p className="hs-note hs-note-notice block">
               Skargi są obsługiwane na stronie. Każdą sprawę można zgłosić osobno, bez nadawania ról, dołączania do serwera ani wysyłania powiadomień na Discordzie.
               W zakładce Pytania przygotuj formularz, np. osoba lub jednostka, opis zdarzenia, data i linki do dowodów.
             </p>}
@@ -574,16 +575,16 @@ export default function StaffRecruitmentForm() {
 
         {/* Questions Tab */}
         {showQuestionsTab && <TabsContent value="questions" className="space-y-4">
-          <div className="rounded-xl bg-[#0F0F13] border border-white/5 p-4 space-y-3" data-testid="sections-editor">
+          <div className="rounded-xl bg-hs-surface p-5 space-y-3" data-testid="sections-editor">
             <div className="flex items-center justify-between gap-3">
               <div>
-                <h3 className="text-sm font-semibold text-zinc-200">Sekcje formularza</h3>
-                <p className="text-xs text-zinc-500 mt-1">Najpierw utwórz sekcje, a potem przypisz do nich pytania.</p>
+                <h3 className="text-sm font-semibold text-hs-ink">Sekcje formularza</h3>
+                <p className="text-xs text-hs-meta mt-1">Najpierw utwórz sekcje, a potem przypisz do nich pytania.</p>
               </div>
               <button
                 type="button"
                 onClick={addSection}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-[#00E5FF]/20 px-3 py-2 text-xs font-medium text-[#00E5FF] hover:bg-[#00E5FF]/5 transition-colors"
+                className="hs-btn hs-btn-ghost hs-btn-sm"
                 data-testid="add-section-button"
               >
                 <Plus className="w-3.5 h-3.5" />Dodaj sekcję
@@ -591,20 +592,20 @@ export default function StaffRecruitmentForm() {
             </div>
 
             {sections.length === 0 ? (
-              <p className="text-sm text-zinc-500">Brak sekcji. Dodaj pierwszą sekcję, aby móc tworzyć pytania.</p>
+              <p className="text-sm text-hs-meta">Brak sekcji. Dodaj pierwszą sekcję, aby móc tworzyć pytania.</p>
             ) : (
               <div className="space-y-2">
                 {sections.map((section, sectionIdx) => (
                   <div
                     key={section._key}
-                    className="flex items-center gap-2 rounded-lg border border-white/5 bg-black/20 px-3 py-2"
+                    className="flex items-center gap-2 rounded-lg bg-hs-sunken px-3 py-2"
                     data-testid={`section-editor-${sectionIdx}`}
                   >
                     <div className="flex flex-col gap-0.5">
                       <button
                         type="button"
                         onClick={() => moveSection(section._key, -1)}
-                        className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"
+                        className="text-hs-faint hover:text-white disabled:opacity-30"
                         disabled={sectionIdx === 0}
                       >
                         <ChevronUp className="w-3.5 h-3.5" />
@@ -612,7 +613,7 @@ export default function StaffRecruitmentForm() {
                       <button
                         type="button"
                         onClick={() => moveSection(section._key, 1)}
-                        className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30"
+                        className="text-hs-faint hover:text-white disabled:opacity-30"
                         disabled={sectionIdx === sections.length - 1}
                       >
                         <ChevronDown className="w-3.5 h-3.5" />
@@ -622,13 +623,13 @@ export default function StaffRecruitmentForm() {
                       value={section.title}
                       onChange={(e) => updateSection(section._key, e.target.value)}
                       placeholder="np. Sekcja OOC"
-                      className="bg-black/40 border-white/10 text-zinc-100 text-sm"
+                      className="h-11 rounded-lg border-hs-control bg-hs-surface text-hs-ink text-[15px] placeholder:text-[#7C868B] hover:border-[#3C474C] focus-visible:ring-0 focus:border-hs-accent focus:shadow-[0_0_0_3px_#12383C]"
                       data-testid={`section-title-${sectionIdx}`}
                     />
                     <button
                       type="button"
                       onClick={() => removeSection(section._key)}
-                      className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-30"
+                      className="p-1.5 text-hs-faint hover:text-hs-negative transition-colors disabled:opacity-30"
                       disabled={sections.length === 1}
                       data-testid={`section-delete-${sectionIdx}`}
                       title={sections.length === 1 ? "Musi pozostać co najmniej jedna sekcja" : "Usuń sekcję"}
@@ -642,22 +643,22 @@ export default function StaffRecruitmentForm() {
           </div>
 
           {questions.map((q, idx) => (
-            <div key={q._key || q.id} className="rounded-xl bg-[#0F0F13] border border-white/5 p-4 space-y-3" data-testid={`question-editor-${idx}`}>
+            <div key={q._key || q.id} className="rounded-xl bg-hs-surface p-5 space-y-3" data-testid={`question-editor-${idx}`}>
               <div className="flex items-start gap-2">
                 <div className="flex flex-col gap-0.5 pt-1">
-                  <button onClick={() => moveQuestion(idx, -1)} className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30" disabled={idx === 0}><ChevronUp className="w-3.5 h-3.5" /></button>
-                  <button onClick={() => moveQuestion(idx, 1)} className="text-zinc-600 hover:text-zinc-300 disabled:opacity-30" disabled={idx === questions.length - 1}><ChevronDown className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => moveQuestion(idx, -1)} className="text-hs-faint hover:text-white disabled:opacity-30" disabled={idx === 0}><ChevronUp className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => moveQuestion(idx, 1)} className="text-hs-faint hover:text-white disabled:opacity-30" disabled={idx === questions.length - 1}><ChevronDown className="w-3.5 h-3.5" /></button>
                 </div>
                 <div className="flex-1 space-y-3">
                   <div className="grid gap-3 sm:grid-cols-[180px_1fr]">
                     <div>
-                      <Label className="text-xs text-zinc-500 mb-1.5 block">Sekcja</Label>
+                      <Label className="text-[13px] text-hs-meta mb-1.5 block">Sekcja</Label>
                       <Select
                         value={q.section_key || getDefaultSectionKey() || ""}
                         onValueChange={(value) => updateQuestion(idx, "section_key", value)}
                         disabled={sections.length === 0}
                       >
-                        <SelectTrigger className="bg-black/40 border-white/10 text-zinc-100 text-xs" data-testid={`q-section-${idx}`}>
+                        <SelectTrigger className="h-11 rounded-lg border-hs-control bg-hs-surface text-hs-ink text-[15px] focus:ring-0 focus:border-hs-accent" data-testid={`q-section-${idx}`}>
                           <SelectValue placeholder="Wybierz sekcję" />
                         </SelectTrigger>
                         <SelectContent>
@@ -670,9 +671,9 @@ export default function StaffRecruitmentForm() {
                       </Select>
                     </div>
                     <div>
-                      <Label className="text-xs text-zinc-500 mb-1.5 block">Pytanie</Label>
+                      <Label className="text-[13px] text-hs-meta mb-1.5 block">Pytanie</Label>
                       <Input value={q.label} onChange={e => updateQuestion(idx, "label", e.target.value)} placeholder="Treść pytania..."
-                        className="bg-black/40 border-white/10 text-zinc-100 text-sm" data-testid={`q-label-${idx}`} />
+                        className="h-11 rounded-lg border-hs-control bg-hs-surface text-hs-ink text-[15px] placeholder:text-[#7C868B] hover:border-[#3C474C] focus-visible:ring-0 focus:border-hs-accent focus:shadow-[0_0_0_3px_#12383C]" data-testid={`q-label-${idx}`} />
                     </div>
                   </div>
                   <div className="flex items-center gap-3 flex-wrap">
@@ -692,58 +693,58 @@ export default function StaffRecruitmentForm() {
                         return { ...question, field_type: v, options: nextOptions };
                       }));
                     }}>
-                      <SelectTrigger className="w-[180px] bg-black/40 border-white/10 text-zinc-300 text-xs" data-testid={`q-type-${idx}`}><SelectValue /></SelectTrigger>
+                      <SelectTrigger className="w-[200px] h-11 rounded-lg border-hs-control bg-hs-surface text-hs-ink text-[15px] focus:ring-0 focus:border-hs-accent" data-testid={`q-type-${idx}`}><SelectValue /></SelectTrigger>
                       <SelectContent>
                         {FIELD_TYPES.map(ft => <SelectItem key={ft.value} value={ft.value}>{ft.label}</SelectItem>)}
                       </SelectContent>
                     </Select>
                     <div className="flex items-center gap-2">
                       <Checkbox id={`req-${idx}`} checked={q.required} onCheckedChange={v => updateQuestion(idx, "required", v)}
-                        className="border-white/20 data-[state=checked]:bg-[#00E5FF] data-[state=checked]:border-[#00E5FF]" />
-                      <Label htmlFor={`req-${idx}`} className="text-xs text-zinc-400 cursor-pointer">Wymagane</Label>
+                        className="border-hs-control data-[state=checked]:bg-hs-accent data-[state=checked]:border-hs-accent data-[state=checked]:text-hs-ground" />
+                      <Label htmlFor={`req-${idx}`} className="text-xs text-hs-muted cursor-pointer">Wymagane</Label>
                     </div>
                   </div>
                   {(q.field_type === "single_choice" || q.field_type === "multi_choice") && (
-                    <div className="space-y-2 pl-2 border-l-2 border-white/5">
+                    <div className="space-y-2 pl-3 border-l-2 border-hs-raised">
                       {(q.options || []).map((opt, optIdx) => (
                         <div key={optIdx} className="flex items-center gap-2">
                           <Input value={opt} onChange={e => updateOption(idx, optIdx, e.target.value)} placeholder={`Opcja ${optIdx + 1}`}
-                            className="bg-black/40 border-white/10 text-zinc-100 text-xs h-8" data-testid={`q-opt-${idx}-${optIdx}`} />
-                          <button onClick={() => removeOption(idx, optIdx)} className="text-zinc-600 hover:text-red-400"><X className="w-3.5 h-3.5" /></button>
+                            className="h-11 rounded-lg border-hs-control bg-hs-surface text-hs-ink text-[15px] placeholder:text-[#7C868B] hover:border-[#3C474C] focus-visible:ring-0 focus:border-hs-accent focus:shadow-[0_0_0_3px_#12383C] h-9 text-sm" data-testid={`q-opt-${idx}-${optIdx}`} />
+                          <button onClick={() => removeOption(idx, optIdx)} className="text-hs-faint hover:text-hs-negative"><X className="w-3.5 h-3.5" /></button>
                         </div>
                       ))}
-                      <button onClick={() => addOption(idx)} className="text-xs text-[#00E5FF] hover:underline flex items-center gap-1">
+                      <button onClick={() => addOption(idx)} className="text-sm hs-link flex items-center gap-1">
                         <Plus className="w-3 h-3" />Dodaj opcję
                       </button>
                     </div>
                   )}
                   {q.field_type === "video" && (
-                    <div className="space-y-3 pl-2 border-l-2 border-white/5">
+                    <div className="space-y-3 pl-3 border-l-2 border-hs-raised">
                       <div className="space-y-2">
-                        <Label className="text-xs text-zinc-500 mb-1.5 block">Link do filmiku</Label>
+                        <Label className="text-[13px] text-hs-meta mb-1.5 block">Link do filmiku</Label>
                         <div className="flex items-center gap-2">
-                          <LinkIcon className="w-4 h-4 text-[#00E5FF] shrink-0" />
+                          <LinkIcon className="w-4 h-4 text-hs-accent shrink-0" />
                           <Input
                             value={q.options?.video?.url || ""}
                             onChange={(event) => handleVideoUrlChange(idx, event.target.value)}
                             placeholder="https://youtu.be/... albo bezposredni link .mp4"
-                            className="bg-black/40 border-white/10 text-zinc-100 text-sm"
+                            className="h-11 rounded-lg border-hs-control bg-hs-surface text-hs-ink text-[15px] placeholder:text-[#7C868B] hover:border-[#3C474C] focus-visible:ring-0 focus:border-hs-accent focus:shadow-[0_0_0_3px_#12383C]"
                             data-testid={`q-video-url-${idx}`}
                           />
                         </div>
                       </div>
                       {parseVideoFromOptions(q.options)?.src && (
-                        <div className="space-y-3 rounded-lg border border-white/5 bg-black/20 p-3">
+                        <div className="space-y-3 rounded-lg bg-hs-sunken p-3">
                           <div className="flex items-center gap-3">
-                            <Video className="w-4 h-4 text-[#00E5FF] shrink-0" />
+                            <Video className="w-4 h-4 text-hs-accent shrink-0" />
                             <div className="min-w-0 flex-1">
-                              <p className="truncate text-sm text-zinc-200">{q.options.video.url || q.options.video.filename || "Filmik"}</p>
-                              <p className="text-xs text-zinc-600">Podglad filmiku</p>
+                              <p className="truncate text-sm text-hs-ink">{q.options.video.url || q.options.video.filename || "Filmik"}</p>
+                              <p className="text-xs text-hs-faint">Podglad filmiku</p>
                             </div>
                             <button
                               type="button"
                               onClick={() => removeVideo(idx)}
-                              className="p-1.5 text-zinc-500 hover:text-red-400"
+                              className="p-1.5 text-hs-meta hover:text-hs-negative"
                               title="Usuń filmik"
                             >
                               <X className="w-4 h-4" />
@@ -755,7 +756,7 @@ export default function StaffRecruitmentForm() {
                     </div>
                   )}
                 </div>
-                <button onClick={() => removeQuestion(idx)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors" data-testid={`q-delete-${idx}`}>
+                <button onClick={() => removeQuestion(idx)} className="p-1.5 text-hs-faint hover:text-hs-negative transition-colors" data-testid={`q-delete-${idx}`}>
                   <Trash2 className="w-4 h-4" />
                 </button>
               </div>
@@ -765,7 +766,7 @@ export default function StaffRecruitmentForm() {
             type="button"
             onClick={addQuestion}
             disabled={sections.length === 0}
-            className="w-full py-3 rounded-xl border border-dashed border-white/10 text-sm text-zinc-500 hover:text-[#00E5FF] hover:border-[#00E5FF]/30 transition-colors flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-40"
+            className="w-full h-12 rounded-xl border border-dashed border-hs-control text-[15px] text-hs-muted hover:text-white hover:border-hs-accent transition-colors flex items-center justify-center gap-2 disabled:cursor-not-allowed disabled:opacity-40"
             data-testid="add-question-button"
           >
             <Plus className="w-4 h-4" />Dodaj pytanie
@@ -775,36 +776,36 @@ export default function StaffRecruitmentForm() {
         {/* Access Tab */}
         {showAccessTab && (
           <TabsContent value="access" className="space-y-4">
-            <p className="text-xs text-zinc-400">
+            <p className="text-xs text-hs-muted">
               ALL pozwala zarządzać tą rekrutacją, pytaniami, podaniami, statystykami i dostępem.
               Tylko twórca rekrutacji i management mogą nadawać lub odbierać ALL.
               Usuwanie podań daje też wgląd w ich treść; sprawdzanie zgłoszeń jest osobnym uprawnieniem.
             </p>
             <div>
-              <Label className="text-zinc-300 mb-1.5 block text-sm">Dodaj uzytkownika</Label>
+              <Label className="text-hs-ink mb-2 block text-[15px] font-medium">Dodaj uzytkownika</Label>
               <Input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Szukaj po nazwie Discord..."
-                className="bg-black/40 border-white/10 text-zinc-100 mb-3" data-testid="access-search" />
+                className="h-11 rounded-lg border-hs-control bg-hs-surface text-hs-ink text-[15px] placeholder:text-[#7C868B] hover:border-[#3C474C] focus-visible:ring-0 focus:border-hs-accent focus:shadow-[0_0_0_3px_#12383C] mb-3" data-testid="access-search" />
               {availableUsers.length > 0 && (
-                <div className="space-y-2 max-h-64 overflow-y-auto rounded-lg border border-white/5 p-2">
+                <div className="space-y-2 max-h-64 overflow-y-auto rounded-xl bg-hs-surface p-2">
                   {availableUsers.map(u => {
                     const selected = getPendingAccess(u.id);
                     return (
                       <div key={u.id}
-                        className="flex items-center gap-3 p-2 rounded-lg bg-white/[0.02] border border-white/5"
+                        className="flex items-center gap-3 p-2 rounded-lg bg-hs-sunken"
                         data-testid={"add-user-" + u.discord_username}>
-                        <Avatar className="w-7 h-7 border border-white/10">
+                        <Avatar className="w-7 h-7">
                           <AvatarImage src={u.discord_avatar ? "https://cdn.discordapp.com/avatars/" + u.discord_id + "/" + u.discord_avatar + ".png?size=64" : undefined} />
-                          <AvatarFallback className="bg-zinc-900 text-zinc-400 text-xs">{(u.discord_global_name||u.discord_username||"?")[0].toUpperCase()}</AvatarFallback>
+                          <AvatarFallback className="bg-hs-raised text-hs-chrome text-xs">{(u.discord_global_name||u.discord_username||"?")[0].toUpperCase()}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm text-zinc-200 truncate">{u.discord_global_name || u.discord_username}</p>
-                          <p className="text-xs text-zinc-500">@{u.discord_username}</p>
+                          <p className="text-sm text-hs-ink truncate">{u.discord_global_name || u.discord_username}</p>
+                          <p className="text-xs text-hs-meta">@{u.discord_username}</p>
                           <div className="flex flex-wrap gap-4 mt-2">
                             <AccessOptions access={selected} canGrantAll={permissions.canGrantAll} onChange={patch => updatePendingAccess(u.id, patch)} />
                           </div>
                         </div>
                         <button onClick={() => addAccess(u.id)}
-                          className="p-2 rounded-lg bg-[#00E5FF]/10 text-[#00E5FF] hover:bg-[#00E5FF]/20 transition-colors"
+                          className="hs-icon-btn w-9 h-9 bg-[#0C2A2E] text-hs-accent-soft hover:bg-[#12383C]"
                           data-testid={"confirm-add-user-" + u.discord_username}
                           title="Dodaj uzytkownika">
                           <UserPlus className="w-4 h-4" />
@@ -815,27 +816,27 @@ export default function StaffRecruitmentForm() {
                 </div>
               )}
             </div>
-            <Separator className="border-white/5" />
+            <Separator className="bg-hs-raised" />
             <div>
-              <Label className="text-zinc-300 mb-2 block text-sm">Uzytkownicy z dostepem ({accessUsers.length})</Label>
+              <Label className="text-hs-ink mb-2 block text-[15px] font-medium">Uzytkownicy z dostepem ({accessUsers.length})</Label>
               {accessUsers.length === 0 ? (
-                <p className="text-sm text-zinc-500">Brak dodanych uzytkownikow</p>
+                <p className="text-sm text-hs-meta">Brak dodanych uzytkownikow</p>
               ) : (
                 <div className="space-y-2" data-testid="access-users-list">
                   {accessUsers.map(u => (
-                    <div key={u.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.02] border border-white/5" data-testid={"access-user-" + u.discord_username}>
-                      <Avatar className="w-8 h-8 border border-white/10">
+                    <div key={u.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-hs-sunken" data-testid={"access-user-" + u.discord_username}>
+                      <Avatar className="w-8 h-8">
                         <AvatarImage src={u.discord_avatar ? "https://cdn.discordapp.com/avatars/" + u.discord_id + "/" + u.discord_avatar + ".png?size=64" : undefined} />
-                        <AvatarFallback className="bg-zinc-900 text-zinc-400 text-xs">{(u.discord_global_name||u.discord_username||"?")[0].toUpperCase()}</AvatarFallback>
+                        <AvatarFallback className="bg-hs-raised text-hs-chrome text-xs">{(u.discord_global_name||u.discord_username||"?")[0].toUpperCase()}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-zinc-200 truncate">{u.discord_global_name || u.discord_username}</p>
-                        <p className="text-xs text-zinc-500">@{u.discord_username}</p>
+                        <p className="text-sm text-hs-ink truncate">{u.discord_global_name || u.discord_username}</p>
+                        <p className="text-xs text-hs-meta">@{u.discord_username}</p>
                         <div className="flex flex-wrap gap-4 mt-2">
                           <AccessOptions access={u} canGrantAll={permissions.canGrantAll} onChange={patch => updateAccess(u, patch)} />
                         </div>
                       </div>
-                      <button disabled={u.can_all && !permissions.canGrantAll} onClick={() => removeAccess(u.id)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors disabled:opacity-40 disabled:cursor-not-allowed" data-testid={"remove-user-" + u.discord_username}>
+                      <button disabled={u.can_all && !permissions.canGrantAll} onClick={() => removeAccess(u.id)} className="p-1.5 text-hs-faint hover:text-hs-negative transition-colors disabled:opacity-40 disabled:cursor-not-allowed" data-testid={"remove-user-" + u.discord_username}>
                         <X className="w-4 h-4" />
                       </button>
                     </div>
@@ -849,37 +850,37 @@ export default function StaffRecruitmentForm() {
         {/* Blacklist Tab */}
         {showAccessTab && (
           <TabsContent value="blacklist" className="space-y-4">
-            <div className="rounded-lg bg-red-500/5 border border-red-500/15 p-4">
+            <div className="hs-note hs-note-bad block">
               <div className="flex items-start gap-3">
-                <Ban className="w-4 h-4 text-red-300 mt-0.5 shrink-0" />
+                <Ban className="w-4 h-4 mt-0.5 shrink-0" />
                 <div>
-                  <p className="text-sm text-red-200 font-medium">Blacklista zgłoszeń</p>
-                  <p className="text-xs text-red-200/60 mt-1">
+                  <p className="font-semibold">Blacklista zgłoszeń</p>
+                  <p className="mt-1 opacity-90">
                     Osoby dodane tutaj nie będą mogły wysłać zgłoszenia w tym panelu po zalogowaniu.
                   </p>
                 </div>
               </div>
             </div>
             <div>
-              <Label className="text-zinc-300 mb-1.5 block text-sm">Dodaj uzytkownika do blacklisty</Label>
+              <Label className="text-hs-ink mb-2 block text-[15px] font-medium">Dodaj uzytkownika do blacklisty</Label>
               <Input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="Szukaj po nazwie Discord..."
-                className="bg-black/40 border-white/10 text-zinc-100 mb-3" data-testid="blacklist-search" />
+                className="h-11 rounded-lg border-hs-control bg-hs-surface text-hs-ink text-[15px] placeholder:text-[#7C868B] hover:border-[#3C474C] focus-visible:ring-0 focus:border-hs-accent focus:shadow-[0_0_0_3px_#12383C] mb-3" data-testid="blacklist-search" />
               {availableBlacklistUsers.length > 0 && (
-                <div className="space-y-2 max-h-64 overflow-y-auto rounded-lg border border-white/5 p-2">
+                <div className="space-y-2 max-h-64 overflow-y-auto rounded-xl bg-hs-surface p-2">
                   {availableBlacklistUsers.map(u => (
                     <div key={u.id}
-                      className="flex items-center gap-3 p-2 rounded-lg bg-white/[0.02] border border-white/5"
+                      className="flex items-center gap-3 p-2 rounded-lg bg-hs-sunken"
                       data-testid={"blacklist-add-user-" + u.discord_username}>
-                      <Avatar className="w-7 h-7 border border-white/10">
+                      <Avatar className="w-7 h-7">
                         <AvatarImage src={u.discord_avatar ? "https://cdn.discordapp.com/avatars/" + u.discord_id + "/" + u.discord_avatar + ".png?size=64" : undefined} />
-                        <AvatarFallback className="bg-zinc-900 text-zinc-400 text-xs">{(u.discord_global_name||u.discord_username||"?")[0].toUpperCase()}</AvatarFallback>
+                        <AvatarFallback className="bg-hs-raised text-hs-chrome text-xs">{(u.discord_global_name||u.discord_username||"?")[0].toUpperCase()}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-zinc-200 truncate">{u.discord_global_name || u.discord_username}</p>
-                        <p className="text-xs text-zinc-500">@{u.discord_username}</p>
+                        <p className="text-sm text-hs-ink truncate">{u.discord_global_name || u.discord_username}</p>
+                        <p className="text-xs text-hs-meta">@{u.discord_username}</p>
                       </div>
                       <button onClick={() => addBlacklist(u.id)}
-                        className="p-2 rounded-lg bg-red-500/10 text-red-300 hover:bg-red-500/20 transition-colors"
+                        className="hs-icon-btn w-9 h-9 bg-[#2A1517] text-hs-negative hover:bg-[#3A1C20]"
                         data-testid={"confirm-blacklist-user-" + u.discord_username}
                         title="Dodaj do blacklisty">
                         <Ban className="w-4 h-4" />
@@ -889,24 +890,24 @@ export default function StaffRecruitmentForm() {
                 </div>
               )}
             </div>
-            <Separator className="border-white/5" />
+            <Separator className="bg-hs-raised" />
             <div>
-              <Label className="text-zinc-300 mb-2 block text-sm">Zablokowani uzytkownicy ({blacklistUsers.length})</Label>
+              <Label className="text-hs-ink mb-2 block text-[15px] font-medium">Zablokowani uzytkownicy ({blacklistUsers.length})</Label>
               {blacklistUsers.length === 0 ? (
-                <p className="text-sm text-zinc-500">Brak uzytkownikow na blackliscie</p>
+                <p className="text-sm text-hs-meta">Brak uzytkownikow na blackliscie</p>
               ) : (
                 <div className="space-y-2" data-testid="blacklist-users-list">
                   {blacklistUsers.map(u => (
-                    <div key={u.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-white/[0.02] border border-white/5" data-testid={"blacklist-user-" + u.discord_username}>
-                      <Avatar className="w-8 h-8 border border-white/10">
+                    <div key={u.id} className="flex items-center gap-3 p-2.5 rounded-lg bg-hs-sunken" data-testid={"blacklist-user-" + u.discord_username}>
+                      <Avatar className="w-8 h-8">
                         <AvatarImage src={u.discord_avatar ? "https://cdn.discordapp.com/avatars/" + u.discord_id + "/" + u.discord_avatar + ".png?size=64" : undefined} />
-                        <AvatarFallback className="bg-zinc-900 text-zinc-400 text-xs">{(u.discord_global_name||u.discord_username||"?")[0].toUpperCase()}</AvatarFallback>
+                        <AvatarFallback className="bg-hs-raised text-hs-chrome text-xs">{(u.discord_global_name||u.discord_username||"?")[0].toUpperCase()}</AvatarFallback>
                       </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm text-zinc-200 truncate">{u.discord_global_name || u.discord_username}</p>
-                        <p className="text-xs text-zinc-500">@{u.discord_username}</p>
+                        <p className="text-sm text-hs-ink truncate">{u.discord_global_name || u.discord_username}</p>
+                        <p className="text-xs text-hs-meta">@{u.discord_username}</p>
                       </div>
-                      <button onClick={() => removeBlacklist(u.id)} className="p-1.5 text-zinc-600 hover:text-red-400 transition-colors" data-testid={"remove-blacklist-user-" + u.discord_username}>
+                      <button onClick={() => removeBlacklist(u.id)} className="p-1.5 text-hs-faint hover:text-hs-negative transition-colors" data-testid={"remove-blacklist-user-" + u.discord_username}>
                         <X className="w-4 h-4" />
                       </button>
                     </div>
@@ -920,13 +921,13 @@ export default function StaffRecruitmentForm() {
 
       {/* Save button */}
       <div className="mt-8 flex gap-3">
-        <button onClick={handleSave} disabled={saving}
-          className="px-6 py-2.5 rounded-xl text-sm font-bold bg-[#00E5FF] text-black hover:bg-[#00E5FF]/90 transition-colors disabled:opacity-50 flex items-center gap-2"
+        <button type="button" onClick={handleSave} disabled={saving}
+          className="hs-btn hs-btn-primary hs-btn-lg"
           data-testid="save-button">
           {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-          {saving ? "Zapisywanie..." : "Zapisz"}
+          {saving ? "Zapisywanie…" : "Zapisz"}
         </button>
-        <Link to="/staff" className="px-6 py-2.5 rounded-xl text-sm font-medium text-zinc-400 border border-white/10 hover:border-white/20 hover:text-zinc-200 transition-colors">
+        <Link to="/staff" className="hs-btn hs-btn-ghost hs-btn-lg">
           Anuluj
         </Link>
       </div>

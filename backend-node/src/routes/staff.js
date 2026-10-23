@@ -281,7 +281,7 @@ async function applyAcceptedDiscordRole(recruitmentId, applicationId) {
   };
 }
 
-function buildApplicationStatusMessage(status, recruitmentName) {
+function buildApplicationStatusMessage(status, recruitmentName, rejectionReason = null) {
   const safeRecruitmentName = recruitmentName || 'rekrutacji';
 
   if (status === 'zaakceptowane') {
@@ -289,13 +289,22 @@ function buildApplicationStatusMessage(status, recruitmentName) {
   }
 
   if (status === 'odrzucone') {
-    return `Czesc! Twoje podanie do "${safeRecruitmentName}" zostalo odrzucone. Dziekujemy za poswiecony czas.`;
+    const message = `Czesc! Twoje podanie do "${safeRecruitmentName}" zostalo odrzucone. Dziekujemy za poswiecony czas.`;
+    return rejectionReason ? `${message}\nPowod: ${rejectionReason}` : message;
   }
 
   return null;
 }
 
-async function notifyApplicantApplicationStatus(recruitmentId, applicationId, status) {
+const REJECTION_REASON_MAX_LENGTH = 1000;
+
+function normalizeRejectionReason(value) {
+  if (value === undefined || value === null) return null;
+  const reason = String(value).trim().slice(0, REJECTION_REASON_MAX_LENGTH);
+  return reason || null;
+}
+
+async function notifyApplicantApplicationStatus(recruitmentId, applicationId, status, rejectionReason = null) {
   const botToken = process.env.DISCORD_BOT_TOKEN;
   if (!botToken) {
     return { attempted: false, success: false, reason: 'missing_bot_token' };
@@ -321,7 +330,7 @@ async function notifyApplicantApplicationStatus(recruitmentId, applicationId, st
     return { attempted: false, success: false, reason: 'missing_discord_id' };
   }
 
-  const message = buildApplicationStatusMessage(status, row.recruitment_name);
+  const message = buildApplicationStatusMessage(status, row.recruitment_name, rejectionReason);
   if (!message) {
     return { attempted: false, success: false, reason: 'status_not_notifiable' };
   }
@@ -634,7 +643,7 @@ router.get('/application-history/users/:userId', requireAuth, async (req, res) =
     }
 
     const appsResult = await query(
-      `SELECT a.id, a.recruitment_id, a.status, a.recruitment_snapshot, a.questions_snapshot,
+      `SELECT a.id, a.recruitment_id, a.status, a.rejection_reason, a.recruitment_snapshot, a.questions_snapshot,
               a.created_at, a.updated_at,
               r.id as live_recruitment_id,
               r.name as live_recruitment_name,
@@ -702,6 +711,7 @@ router.get('/application-history/users/:userId', requireAuth, async (req, res) =
       return {
         id: app.id,
         status: app.status,
+        rejection_reason: app.rejection_reason || null,
         recruitment_id: app.recruitment_id,
         recruitment,
         recruitment_snapshot: snapshot,
@@ -1413,6 +1423,12 @@ router.patch('/recruitments/:recruitmentId/applications/:applicationId/status', 
     if (!validStatuses.includes(status)) {
       return res.status(400).json({ error: `Status musi byc jednym z: ${validStatuses.join(', ')}` });
     }
+    // An omitted reason keeps the stored one, so re-sending the same decision does not wipe it.
+    const reasonProvided = Object.prototype.hasOwnProperty.call(req.body, 'reason');
+    if (reasonProvided && req.body.reason !== null && typeof req.body.reason !== 'string') {
+      return res.status(400).json({ error: 'Powod odrzucenia musi byc tekstem' });
+    }
+    const rejectionReason = normalizeRejectionReason(req.body.reason);
 
     const permission = await getRecruitmentPermission(staffUser, recruitmentId);
     if (!permission.canReviewApplications) {
@@ -1430,13 +1446,14 @@ router.patch('/recruitments/:recruitmentId/applications/:applicationId/status', 
          UPDATE applications SET
            status = $1,
            reviewed_by_id = CASE WHEN status = $1 THEN reviewed_by_id WHEN $1 IN ('zaakceptowane', 'odrzucone') THEN $4::uuid ELSE NULL END,
+           rejection_reason = CASE WHEN $1 <> 'odrzucone' THEN NULL WHEN $5::boolean THEN $6::text ELSE rejection_reason END,
            updated_at = CASE WHEN status = $1 THEN updated_at ELSE NOW() END
          WHERE id = (SELECT id FROM previous)
-         RETURNING id, status, updated_at
+         RETURNING id, status, rejection_reason, updated_at
        )
-       SELECT updated.id, updated.status, updated.updated_at, previous.status as previous_status
+       SELECT updated.id, updated.status, updated.rejection_reason, updated.updated_at, previous.status as previous_status
        FROM updated, previous`,
-      [status, applicationId, recruitmentId, staffUser.userId]
+      [status, applicationId, recruitmentId, staffUser.userId, reasonProvided, rejectionReason]
     );
 
     if (result.rows.length === 0) {
@@ -1457,7 +1474,7 @@ router.patch('/recruitments/:recruitmentId/applications/:applicationId/status', 
     let discord_dm_result = null;
     if (app.previous_status !== status && ['zaakceptowane', 'odrzucone'].includes(status)) {
       try {
-        discord_dm_result = await notifyApplicantApplicationStatus(recruitmentId, applicationId, status);
+        discord_dm_result = await notifyApplicantApplicationStatus(recruitmentId, applicationId, status, app.rejection_reason);
       } catch (notifyErr) {
         logger.error('Failed to notify applicant about application status', notifyErr);
         discord_dm_result = { attempted: true, success: false, reason: 'notification_error' };
@@ -1467,6 +1484,7 @@ router.patch('/recruitments/:recruitmentId/applications/:applicationId/status', 
     res.json({
       id: app.id,
       status: app.status,
+      rejection_reason: app.rejection_reason || null,
       updated_at: app.updated_at.toISOString(),
       discord_role_result,
       discord_dm_result,
@@ -1499,7 +1517,7 @@ router.get('/recruitments/:recruitmentId/applications/:applicationId', requireAu
 
     // Fetch application
     const appResult = await query(
-      `SELECT a.id, a.user_id, a.status, a.questions_snapshot, a.created_at, r.category as recruitment_category,
+      `SELECT a.id, a.user_id, a.status, a.rejection_reason, a.questions_snapshot, a.created_at, r.category as recruitment_category,
               u.discord_id as applicant_discord_id,
               u.discord_username as applicant_username,
               u.discord_avatar as applicant_avatar,
@@ -1539,6 +1557,7 @@ router.get('/recruitments/:recruitmentId/applications/:applicationId', requireAu
       discord_username: application.discord_username,
       discord_avatar: application.discord_avatar,
       status: application.status,
+      rejection_reason: application.rejection_reason || null,
       questions_snapshot: application.questions_snapshot,
       answers: answersResult.rows.map(a => ({
         question_id: a.question_id,

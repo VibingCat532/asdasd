@@ -1,114 +1,104 @@
+import { useEffect, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth";
 import { SiDiscord } from "react-icons/si";
 import { Avatar, AvatarFallback, AvatarImage } from "../components/ui/avatar";
-import { LogOut, FileText, Home, LayoutDashboard, History } from "lucide-react";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "../components/ui/tooltip";
+import { LogOut, Menu, X } from "lucide-react";
+import { discordAvatarUrl } from "../lib/panels";
 
 export default function Navbar() {
   const { user, staffInfo, login, logout } = useAuth();
   const location = useLocation();
+  const [menuOpen, setMenuOpen] = useState(false);
 
-  const discordAvatarUrl = user?.discord_avatar
-    ? `https://cdn.discordapp.com/avatars/${user.discord_id}/${user.discord_avatar}.png?size=64`
-    : null;
+  useEffect(() => {
+    setMenuOpen(false);
+  }, [location.pathname]);
 
-  const isActive = (path) => location.pathname === path;
   const startsWith = (prefix) => location.pathname.startsWith(prefix);
   const isStaff = staffInfo?.is_staff;
   const isManagement = staffInfo?.is_management === true;
+  const displayName = user ? user.discord_global_name || user.discord_username : "";
+
+  const links = [
+    { to: "/", label: "Panele", active: location.pathname === "/" || startsWith("/recruitment"), testId: "nav-rekrutacje" },
+    user && { to: "/my-applications", label: "Moje zgłoszenia", active: startsWith("/my-applications"), testId: "nav-moje-aplikacje" },
+    isStaff && { to: "/staff", label: "Panel staff", active: location.pathname === "/staff" || startsWith("/staff/recruitments"), testId: "nav-staff-panel" },
+    isManagement && { to: "/staff/history", label: "Historia podań", active: startsWith("/staff/history"), testId: "nav-history" },
+  ].filter(Boolean);
 
   return (
-    <TooltipProvider>
-      <nav
-        className="sticky top-0 z-50 border-b border-white/10 backdrop-blur-xl"
-        style={{ background: "rgba(5, 5, 5, 0.85)" }}
-        data-testid="navbar"
-      >
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 group" data-testid="nav-logo">
-            <span className="text-base font-bold tracking-tight transition-colors group-hover:text-[#00E5FF]"
-              style={{ fontFamily: "'Unbounded', sans-serif", color: "#FAFAFA" }}>HOOD</span>
-            <span className="text-base font-bold tracking-tight"
-              style={{ fontFamily: "'Unbounded', sans-serif", color: "#00E5FF" }}>STORIES</span>
-          </Link>
+    <header className="sticky top-0 z-50 bg-hs-ground border-b border-[#14191B]" data-testid="navbar">
+      <div className="max-w-[1240px] mx-auto px-4 sm:px-8 h-[60px] sm:h-[72px] flex items-center gap-6 lg:gap-10">
+        <Link to="/" className="flex items-center gap-2.5 text-hs-ink hover:text-white" data-testid="nav-logo" aria-label="HoodStories — strona główna">
+          <img src="/logo-mark.webp" alt="" width="120" height="92" className="h-8 sm:h-9 w-auto" />
+          <span className="hs-display text-[21px] sm:text-2xl leading-none">HoodStories</span>
+        </Link>
 
-          <div className="hidden sm:flex items-center gap-1">
-            <NavLink to="/" active={isActive("/")} icon={<Home className="w-3.5 h-3.5" />} label="Rekrutacje i skargi" testId="nav-rekrutacje" />
-            {user && (
-              <NavLink to="/my-applications" active={startsWith("/my-applications")}
-                icon={<FileText className="w-3.5 h-3.5" />} label="Moje zgłoszenia" testId="nav-moje-aplikacje" />
-            )}
-            {isStaff && (
-              <NavLink to="/staff" active={location.pathname === "/staff" || startsWith("/staff/recruitments")}
-                icon={<LayoutDashboard className="w-3.5 h-3.5" />} label="Panel" testId="nav-staff-panel" />
-            )}
-            {isManagement && (
-              <NavLink to="/staff/history" active={startsWith("/staff/history")}
-                icon={<History className="w-3.5 h-3.5" />} label="Historia" testId="nav-history" />
-            )}
-          </div>
+        <nav aria-label="Główna" className="hidden md:flex items-center gap-7 flex-1">
+          {links.map((link) => (
+            <Link
+              key={link.to}
+              to={link.to}
+              aria-current={link.active ? "page" : undefined}
+              className={`text-[15px] font-medium ${link.active ? "text-white" : "text-hs-muted hover:text-white"}`}
+              data-testid={link.testId}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
 
-          <div className="flex items-center gap-2">
-            {/* Mobile nav icons */}
-            {user && (
-              <div className="flex sm:hidden items-center gap-1">
-                <Link to="/my-applications" className="p-2 text-zinc-400 hover:text-zinc-200"><FileText className="w-4 h-4" /></Link>
-                {isStaff && <Link to="/staff" className="p-2 text-zinc-400 hover:text-zinc-200"><LayoutDashboard className="w-4 h-4" /></Link>}
-                {isManagement && <Link to="/staff/history" className="p-2 text-zinc-400 hover:text-zinc-200"><History className="w-4 h-4" /></Link>}
-              </div>
-            )}
-            {user ? (
-              <div className="flex items-center gap-2">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex items-center gap-2">
-                      <Avatar className="w-7 h-7 border border-[#00E5FF]/30">
-                        <AvatarImage src={discordAvatarUrl} alt={user.discord_username} />
-                        <AvatarFallback className="bg-zinc-900 text-[#00E5FF] text-xs font-bold">
-                          {(user.discord_global_name || user.discord_username || "?")[0].toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <span className="hidden md:block text-sm text-zinc-300 font-medium max-w-[120px] truncate" data-testid="nav-username">
-                        {user.discord_global_name || user.discord_username}
-                      </span>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent><p>@{user.discord_username}</p></TooltipContent>
-                </Tooltip>
-                <button onClick={logout} className="p-1.5 rounded-lg text-zinc-500 hover:text-zinc-200 hover:bg-white/5 transition-colors" data-testid="nav-logout-button">
-                  <LogOut className="w-4 h-4" />
-                </button>
-              </div>
-            ) : (
-              <button onClick={login}
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-sm font-semibold text-white transition-all duration-200 hover:shadow-[0_0_16px_rgba(88,101,242,0.3)]"
-                style={{ background: "#5865F2" }} data-testid="nav-login-button">
-                <SiDiscord className="w-4 h-4" />
-                <span className="hidden sm:inline">Zaloguj</span>
+        <div className="ml-auto md:ml-0 flex items-center gap-2">
+          {user ? (
+            <div className="flex items-center gap-2.5">
+              <Avatar className="w-[34px] h-[34px]" title={`@${user.discord_username}`}>
+                <AvatarImage src={discordAvatarUrl(user.discord_id, user.discord_avatar)} alt="" />
+                <AvatarFallback className="bg-[#0B3237] text-[#6FE9FF] text-sm font-semibold">
+                  {(displayName || "?")[0].toUpperCase()}
+                </AvatarFallback>
+              </Avatar>
+              <span className="hidden lg:block text-[15px] font-medium max-w-[140px] truncate" data-testid="nav-username">
+                {displayName}
+              </span>
+              <button type="button" onClick={logout} className="hs-icon-btn w-9 h-9" aria-label="Wyloguj" title="Wyloguj" data-testid="nav-logout-button">
+                <LogOut className="w-[18px] h-[18px]" strokeWidth={1.8} />
               </button>
-            )}
-          </div>
+            </div>
+          ) : (
+            <button type="button" onClick={login} className="hs-btn hs-btn-primary px-4 sm:px-[18px]" data-testid="nav-login-button">
+              <SiDiscord className="w-[18px] h-[18px]" />
+              <span className="hidden sm:inline">Zaloguj przez Discord</span>
+              <span className="sm:hidden">Zaloguj</span>
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => setMenuOpen((open) => !open)}
+            className="md:hidden hs-icon-btn w-11 h-11 bg-hs-surface"
+            aria-label={menuOpen ? "Zamknij menu" : "Otwórz menu"}
+            aria-expanded={menuOpen}
+            aria-controls="hs-mobile-menu"
+          >
+            {menuOpen ? <X className="w-5 h-5" strokeWidth={1.8} /> : <Menu className="w-5 h-5" strokeWidth={1.8} />}
+          </button>
         </div>
-      </nav>
-    </TooltipProvider>
-  );
-}
+      </div>
 
-function NavLink({ to, active, icon, label, testId }) {
-  return (
-    <Link to={to}
-      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
-        active ? "text-[#00E5FF] bg-[#00E5FF]/10" : "text-zinc-400 hover:text-zinc-200 hover:bg-white/5"
-      }`}
-      data-testid={testId}
-    >
-      {icon}{label}
-    </Link>
+      {menuOpen && (
+        <nav id="hs-mobile-menu" aria-label="Menu" className="md:hidden border-t border-[#14191B] px-4 pb-4 pt-2">
+          {links.map((link) => (
+            <Link
+              key={link.to}
+              to={link.to}
+              aria-current={link.active ? "page" : undefined}
+              className={`flex items-center h-12 text-base font-medium ${link.active ? "text-white" : "text-hs-muted"}`}
+            >
+              {link.label}
+            </Link>
+          ))}
+        </nav>
+      )}
+    </header>
   );
 }

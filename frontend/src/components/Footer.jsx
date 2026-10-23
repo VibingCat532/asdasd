@@ -3,38 +3,21 @@ const DISCORD_URL = "https://discord.gg/hspl";
 
 export default function Footer() {
   return (
-    <footer className="py-10 text-center" data-testid="site-footer">
-      <p className="text-sm text-zinc-500" style={{ fontFamily: "'Outfit', sans-serif" }}>
-        © 2026 HoodStories. Wszelkie prawa zastrzeżone.
-      </p>
-      <div
-        className="mt-3 flex items-center justify-center gap-4 text-sm"
-        style={{ fontFamily: "'Outfit', sans-serif" }}
-      >
-        <a
-          href={RULES_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-zinc-500 transition-colors hover:text-[#00E5FF]"
-          data-testid="footer-rules-link"
-        >
+    <footer className="max-w-[1240px] w-full mx-auto px-4 sm:px-8 pt-14 pb-12 flex flex-col sm:flex-row sm:flex-wrap sm:items-center sm:justify-between gap-4 sm:gap-6" data-testid="site-footer">
+      <div className="flex items-center gap-2.5">
+        <img src="/logo-mark.webp" alt="" width="120" height="92" className="h-8 w-auto" />
+        <span className="hs-display text-[22px] leading-none">HoodStories</span>
+      </div>
+      <nav aria-label="Stopka" className="flex flex-wrap gap-6 text-[15px]">
+        <a href={RULES_URL} target="_blank" rel="noopener noreferrer" className="text-hs-muted hover:text-white" data-testid="footer-rules-link">
           Regulamin
         </a>
-        <span className="text-zinc-700" aria-hidden="true">
-          ·
-        </span>
-        <a
-          href={DISCORD_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="text-zinc-500 transition-colors hover:text-[#00E5FF]"
-          data-testid="footer-discord-link"
-        >
+        <a href={DISCORD_URL} target="_blank" rel="noopener noreferrer" className="text-hs-muted hover:text-white" data-testid="footer-discord-link">
           Discord
         </a>
-      </div>
-      <p className="mt-3 text-sm text-zinc-500" style={{ fontFamily: "'Outfit', sans-serif" }}>
-        made by <span className="text-[#00E5FF]">VibingCat</span>
+      </nav>
+      <p className="text-sm text-hs-meta">
+        © 2026 HoodStories · made by <span className="text-hs-chrome">VibingCat</span>
       </p>
     </footer>
   );

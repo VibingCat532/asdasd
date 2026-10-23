@@ -8,6 +8,7 @@ const express = require('express');
 let db, server, base;
 let owner, reviewer, analyst, applicant, manager, recruitment, complaint;
 let discordCalls = 0;
+let lastDiscordArgs = null;
 
 function stub(modulePath, exports) {
   require.cache[require.resolve(modulePath)] = { id: require.resolve(modulePath), filename: require.resolve(modulePath), loaded: true, exports };
@@ -48,7 +49,7 @@ before(async () => {
     GUILD_ID: 'test-guild',
     resolveUserCapabilities: async discordId => ({ is_management: discordId === 'manager', is_opiekun: discordId === 'owner', is_staff: ['owner', 'manager'].includes(discordId) }),
   });
-  const sideEffect = async () => { discordCalls++; return true; };
+  const sideEffect = async (...args) => { discordCalls++; lastDiscordArgs = args; return true; };
   stub('../src/utils/discord', { addGuildMember: sideEffect, addGuildMemberRole: sideEffect, sendDiscordDirectMessage: sideEffect });
   // A fake token ensures the tests exercise the complaint guard, not the missing-token guard.
   process.env.DISCORD_BOT_TOKEN = 'test-only';
@@ -269,4 +270,61 @@ test('management can grant and revoke ALL without owning the recruitment', async
   assert.equal((await request(`${route}/access/${analyst}`, { ...options, method: 'DELETE' })).status, 200);
   const application = await addApplication(recruitment);
   assert.equal((await request(`${route}/applications/${application}`, { ...options, method: 'DELETE' })).status, 200);
+});
+
+async function addPanelWithQuestion(slug) {
+  const { rows } = await db.query(`INSERT INTO recruitments (name, slug, description, creator_id) VALUES ($1, $1, 'Join us', $2) RETURNING id`, [slug, owner]);
+  const question = await db.query(`INSERT INTO recruitment_questions (recruitment_id, label, field_type, required) VALUES ($1, 'Why?', 'long_text', true) RETURNING id`, [rows[0].id]);
+  return { panel: rows[0].id, body: { answers: { [question.rows[0].id]: 'Because' } } };
+}
+
+test('an accepted application no longer blocks a new one, a pending one still does', async () => {
+  const { panel, body } = await addPanelWithQuestion('reapply');
+  const first = await request(`/recruitments/${panel}/apply`, { user: applicant, method: 'POST', body });
+  assert.equal(first.status, 201);
+  assert.equal((await request(`/recruitments/${panel}/apply`, { user: applicant, method: 'POST', body })).status, 409);
+  let detail = (await request(`/recruitments/${panel}`, { user: applicant })).data;
+  assert.equal(detail.user_can_apply, false);
+  assert.equal(detail.user_apply_block_reason, 'nowe');
+
+  assert.equal((await request(`/staff/recruitments/${panel}/applications/${first.data.id}/status`, { method: 'PATCH', body: { status: 'zaakceptowane' } })).status, 200);
+  detail = (await request(`/recruitments/${panel}`, { user: applicant })).data;
+  assert.equal(detail.user_can_apply, true);
+  assert.equal(detail.user_application_status, 'zaakceptowane');
+  assert.equal((await request(`/recruitments/${panel}/apply`, { user: applicant, method: 'POST', body })).status, 201);
+  assert.equal((await request(`/recruitments/${panel}`, { user: applicant })).data.user_can_apply, false);
+});
+
+test('a rejection reason is stored, shown to the applicant, sent in the DM and cleared on reopening', async () => {
+  const { panel, body } = await addPanelWithQuestion('reasons');
+  const application = (await request(`/recruitments/${panel}/apply`, { user: applicant, method: 'POST', body })).data.id;
+  const route = `/staff/recruitments/${panel}/applications/${application}/status`;
+
+  assert.equal((await request(route, { method: 'PATCH', body: { status: 'odrzucone', reason: 42 } })).status, 400);
+  discordCalls = 0;
+  const rejected = await request(route, { method: 'PATCH', body: { status: 'odrzucone', reason: '  Za krótkie odpowiedzi  ' } });
+  assert.equal(rejected.status, 200);
+  assert.equal(rejected.data.rejection_reason, 'Za krótkie odpowiedzi');
+  assert.equal(discordCalls, 1);
+  assert.match(lastDiscordArgs[1], /Powod: Za krótkie odpowiedzi$/);
+
+  assert.equal((await request(`/applications/${application}`, { user: applicant })).data.rejection_reason, 'Za krótkie odpowiedzi');
+  assert.equal((await request('/applications', { user: applicant })).data.find(a => a.id === application).rejection_reason, 'Za krótkie odpowiedzi');
+  assert.equal((await request(`/staff/recruitments/${panel}/applications/${application}`)).data.rejection_reason, 'Za krótkie odpowiedzi');
+  const history = (await request(`/staff/application-history/users/${applicant}`, { user: manager })).data;
+  assert.equal(history.applications.find(a => a.id === application).rejection_reason, 'Za krótkie odpowiedzi');
+
+  // Re-sending the decision without a reason keeps it; editing it does not message the applicant again.
+  assert.equal((await request(route, { method: 'PATCH', body: { status: 'odrzucone' } })).data.rejection_reason, 'Za krótkie odpowiedzi');
+  assert.equal((await request(route, { method: 'PATCH', body: { status: 'odrzucone', reason: 'Brak klipu' } })).data.rejection_reason, 'Brak klipu');
+  assert.equal(discordCalls, 1);
+  assert.equal((await request(route, { method: 'PATCH', body: { status: 'odrzucone', reason: '   ' } })).data.rejection_reason, null);
+  await request(route, { method: 'PATCH', body: { status: 'odrzucone', reason: 'x'.repeat(1500) } });
+  assert.equal((await request(`/applications/${application}`, { user: applicant })).data.rejection_reason.length, 1000);
+
+  assert.equal((await request(route, { method: 'PATCH', body: { status: 'nowe' } })).data.rejection_reason, null);
+  await request(route, { method: 'PATCH', body: { status: 'odrzucone' } });
+  assert.match(lastDiscordArgs[1], /czas\.$/);
+  await request(route, { method: 'PATCH', body: { status: 'zaakceptowane', reason: 'ignored' } });
+  assert.equal((await db.query('SELECT rejection_reason FROM applications WHERE id = $1', [application])).rows[0].rejection_reason, null);
 });

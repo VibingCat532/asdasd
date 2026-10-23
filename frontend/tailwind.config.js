@@ -7,12 +7,36 @@ module.exports = {
   ],
   theme: {
   	extend: {
+  		fontFamily: {
+  			sans: ['Archivo', 'system-ui', 'sans-serif'],
+  			mono: ['ui-monospace', '"Cascadia Mono"', 'Menlo', 'Consolas', 'monospace']
+  		},
   		borderRadius: {
   			lg: 'var(--radius)',
   			md: 'calc(var(--radius) - 2px)',
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		colors: {
+  			hs: {
+  				ground: '#050607',
+  				surface: '#0D1011',
+  				sunken: '#0A0D0E',
+  				raised: '#161B1D',
+  				line: '#1A2023',
+  				control: '#2C3539',
+  				petrol: '#004651',
+  				'petrol-deep': '#00363F',
+  				accent: '#4CC6D1',
+  				'accent-soft': '#7FDCE5',
+  				ink: '#F2F0EF',
+  				chrome: '#C3C9CC',
+  				muted: '#AEB6BA',
+  				meta: '#8D979C',
+  				faint: '#6E787D',
+  				positive: '#5FD08F',
+  				negative: '#F28B8B',
+  				notice: '#E8C872'
+  			},
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
   			card: {

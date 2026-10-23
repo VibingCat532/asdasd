@@ -100,16 +100,12 @@ async function submitApplication(req, res) {
       [userId, recruitmentId]
     );
 
+    // Only an application still waiting for a decision blocks a new one; accepted and rejected ones do not.
     if (recruitment.category !== 'complaints' && existingResult.rows.length > 0) {
       const existingStatus = existingResult.rows[0].status;
       if (existingStatus === 'nowe') {
         return res.status(409).json({
           error: 'Masz już aktywną aplikację w tej rekrutacji',
-        });
-      }
-      if (existingStatus === 'zaakceptowane') {
-        return res.status(409).json({
-          error: 'Twoja aplikacja w tej rekrutacji została już zaakceptowana',
         });
       }
     }
@@ -241,7 +237,7 @@ router.get('/', requireAuth, async (req, res) => {
 
   try {
     const result = await query(
-      `SELECT a.id, a.status, a.created_at, a.recruitment_id, a.recruitment_snapshot,
+      `SELECT a.id, a.status, a.rejection_reason, a.created_at, a.recruitment_id, a.recruitment_snapshot,
               COALESCE(r.name, a.recruitment_snapshot->>'name', 'Usunieta rekrutacja') as recruitment_name
        FROM applications a
        LEFT JOIN recruitments r ON r.id = a.recruitment_id
@@ -257,6 +253,7 @@ router.get('/', requireAuth, async (req, res) => {
       recruitment_deleted: !r.recruitment_id,
       recruitment_snapshot: r.recruitment_snapshot,
       status: r.status,
+      rejection_reason: r.rejection_reason || null,
       created_at: r.created_at.toISOString(),
     }));
 
@@ -278,7 +275,7 @@ router.get('/:applicationId', requireAuth, async (req, res) => {
   try {
     // Fetch application (must belong to current user)
     const appResult = await query(
-      `SELECT a.id, a.status, a.questions_snapshot, a.created_at, a.recruitment_id, a.recruitment_snapshot,
+      `SELECT a.id, a.status, a.rejection_reason, a.questions_snapshot, a.created_at, a.recruitment_id, a.recruitment_snapshot,
               COALESCE(r.name, a.recruitment_snapshot->>'name', 'Usunieta rekrutacja') as recruitment_name,
               COALESCE(reviewer.discord_global_name, reviewer.discord_username) as reviewer_name
        FROM applications a
@@ -315,6 +312,7 @@ router.get('/:applicationId', requireAuth, async (req, res) => {
       recruitment_deleted: !application.recruitment_id,
       recruitment_snapshot: application.recruitment_snapshot,
       status: application.status,
+      rejection_reason: application.rejection_reason || null,
       questions_snapshot: application.questions_snapshot,
       answers,
       created_at: application.created_at.toISOString(),

@@ -1,68 +1,64 @@
-@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Outfit:wght@300;400;500;600;700;800&family=Unbounded:wght@300;400;700;900&family=Manrope:wght@400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..800&display=swap');
 
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* Colours come from the logo: petrol from "hood", chrome from "Stories". */
 :root {
-    --hs-bg: #050508;
-    --hs-surface: #12121A;
-    --hs-surface-glass: rgba(10, 10, 14, 0.7);
-    --hs-border: rgba(255, 255, 255, 0.1);
-    --hs-border-glow: rgba(0, 212, 255, 0.3);
-    --hs-accent: #00D4FF;
-    --hs-accent-hover: #33DDFF;
-    --hs-text: #F8F8F8;
-    --hs-text-secondary: #A0A0A8;
-    --hs-success: #00E676;
-    --hs-error: #FF3B30;
-    --hs-discord: #5865F2;
-    --hs-discord-hover: #4752C4;
+    --hs-ground: #050607;
+    --hs-surface: #0D1011;
+    --hs-sunken: #0A0D0E;
+    --hs-raised: #161B1D;
+    --hs-line: #1A2023;
+    --hs-control: #2C3539;
+    --hs-petrol: #004651;
+    --hs-accent: #4CC6D1;
+    --hs-accent-hover: #8FE0E7;
+    --hs-ink: #F2F0EF;
+    --hs-chrome: #C3C9CC;
+    --hs-meta: #8D979C;
 }
 
 body {
     margin: 0;
-    font-family: 'Manrope', sans-serif;
+    font-family: 'Archivo', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
-    background: var(--hs-bg);
-    color: var(--hs-text);
+    background: var(--hs-ground);
+    color: var(--hs-ink);
 }
 
-h1, h2, h3, h4, h5, h6 {
-    font-family: 'Outfit', sans-serif;
-}
-
-code {
-    font-family: source-code-pro, Menlo, Monaco, Consolas, 'Courier New', monospace;
+code, pre {
+    font-family: ui-monospace, 'Cascadia Mono', Menlo, Consolas, monospace;
 }
 
 @layer base {
     :root {
-        --background: 240 10% 2%;
-        --foreground: 0 0% 97%;
-        --card: 240 10% 7%;
-        --card-foreground: 0 0% 97%;
-        --popover: 240 10% 7%;
-        --popover-foreground: 0 0% 97%;
-        --primary: 191 100% 50%;
-        --primary-foreground: 240 10% 2%;
-        --secondary: 240 10% 12%;
-        --secondary-foreground: 0 0% 97%;
-        --muted: 240 10% 12%;
-        --muted-foreground: 240 5% 64%;
-        --accent: 240 10% 12%;
-        --accent-foreground: 0 0% 97%;
-        --destructive: 0 84% 60%;
+        --background: 210 17% 2%;
+        --foreground: 20 8% 94%;
+        --card: 195 13% 6%;
+        --card-foreground: 20 8% 94%;
+        --popover: 197 14% 8%;
+        --popover-foreground: 20 8% 94%;
+        --primary: 185 59% 56%;
+        --primary-foreground: 210 17% 2%;
+        --secondary: 197 14% 10%;
+        --secondary-foreground: 20 8% 94%;
+        --muted: 197 14% 10%;
+        --muted-foreground: 200 7% 58%;
+        --accent: 197 14% 10%;
+        --accent-foreground: 20 8% 94%;
+        --destructive: 350 73% 62%;
         --destructive-foreground: 0 0% 98%;
-        --border: 240 10% 14%;
-        --input: 240 10% 14%;
-        --ring: 191 100% 50%;
-        --chart-1: 191 100% 50%;
-        --chart-2: 145 100% 45%;
-        --chart-3: 234 85% 65%;
-        --chart-4: 30 80% 55%;
-        --chart-5: 0 80% 55%;
+        --border: 198 14% 14%;
+        --input: 198 14% 18%;
+        --ring: 185 59% 56%;
+        --chart-1: 185 59% 56%;
+        --chart-2: 145 55% 59%;
+        --chart-3: 200 7% 58%;
+        --chart-4: 43 72% 68%;
+        --chart-5: 0 80% 75%;
         --radius: 0.75rem;
     }
 }
@@ -73,6 +69,13 @@ code {
     }
     body {
         @apply bg-background text-foreground;
+    }
+    a {
+        @apply transition-colors;
+    }
+    :focus-visible {
+        outline: 2px solid var(--hs-accent);
+        outline-offset: 2px;
     }
 }
 
@@ -99,17 +102,106 @@ code {
     }
 }
 
-/* Custom scrollbar */
+@layer components {
+    /* Headings: Archivo at 62% width, the one display voice of the site. */
+    .hs-display {
+        font-stretch: 62%;
+        font-weight: 800;
+        text-transform: uppercase;
+        line-height: 0.92;
+        letter-spacing: -0.005em;
+    }
+
+    .hs-card {
+        @apply rounded-xl bg-hs-surface;
+    }
+
+    .hs-btn {
+        @apply inline-flex items-center justify-center gap-2 h-10 px-4 rounded-full text-sm font-medium whitespace-nowrap transition-[background-color,color,transform] duration-150 active:scale-[0.98] disabled:pointer-events-none disabled:opacity-50;
+    }
+    .hs-btn-lg {
+        @apply h-12 px-6 text-base;
+    }
+    .hs-btn-sm {
+        @apply h-8 px-3;
+    }
+    .hs-btn-primary {
+        @apply bg-hs-ink text-hs-ground font-semibold hover:bg-white;
+    }
+    .hs-btn-ghost {
+        @apply text-hs-ink shadow-[inset_0_0_0_1px_#2C3539] hover:bg-hs-raised hover:text-white;
+    }
+    .hs-btn-danger {
+        @apply text-hs-negative font-semibold shadow-[inset_0_0_0_1px_#5A2A30] hover:bg-[#2A1517];
+    }
+    .hs-icon-btn {
+        @apply inline-flex items-center justify-center w-8 h-8 rounded-full text-hs-muted transition-colors hover:bg-hs-raised hover:text-white disabled:opacity-40;
+    }
+
+    .hs-link {
+        @apply text-hs-accent hover:text-[#8FE0E7];
+    }
+    .hs-back {
+        @apply inline-flex items-center gap-2 text-[15px] text-hs-muted hover:text-white;
+    }
+
+    .hs-label {
+        @apply block text-base font-medium text-hs-ink;
+    }
+    .hs-field {
+        @apply w-full rounded-lg border border-hs-control bg-hs-surface px-3.5 text-base text-hs-ink transition-[border-color,box-shadow] placeholder:text-[#7C868B] hover:border-[#3C474C] focus:outline-none focus:border-hs-accent focus:shadow-[0_0_0_3px_#12383C] disabled:opacity-60;
+    }
+    .hs-field-invalid {
+        @apply border-[#E5566F] hover:border-[#E5566F];
+    }
+
+    .hs-pill {
+        @apply inline-flex flex-none items-center gap-2 h-6 px-2.5 rounded-full text-[13px] font-medium whitespace-nowrap;
+    }
+    .hs-pill-dot {
+        @apply w-1.5 h-1.5 rounded-full;
+    }
+    .hs-pill-new {
+        @apply bg-[#0C2A2E] text-hs-accent-soft;
+    }
+    .hs-pill-ok {
+        @apply bg-[#13261B] text-hs-positive;
+    }
+    .hs-pill-bad {
+        @apply bg-[#2A1517] text-hs-negative;
+    }
+    .hs-pill-neutral {
+        @apply bg-hs-raised text-hs-chrome;
+    }
+
+    .hs-note {
+        @apply flex items-start gap-2.5 rounded-lg px-3.5 py-3 text-sm leading-snug;
+    }
+    .hs-note-notice {
+        @apply bg-[#17150E] text-hs-notice;
+    }
+    .hs-note-bad {
+        @apply bg-[#1E1012] text-hs-negative;
+    }
+    .hs-note-info {
+        @apply bg-[#0C2A2E] text-hs-accent-soft;
+    }
+    .hs-note-ok {
+        @apply bg-[#13261B] text-hs-positive;
+    }
+}
+
 ::-webkit-scrollbar {
-    width: 6px;
+    width: 8px;
+    height: 8px;
 }
 ::-webkit-scrollbar-track {
-    background: var(--hs-bg);
+    background: var(--hs-ground);
 }
 ::-webkit-scrollbar-thumb {
-    background: var(--hs-border);
-    border-radius: 3px;
+    background: var(--hs-control);
+    border-radius: 4px;
 }
 ::-webkit-scrollbar-thumb:hover {
-    background: var(--hs-accent);
+    background: #3C474C;
 }
